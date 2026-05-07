@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck
+from backend.game import create_deck, create_players
 from backend.models import CardType
 
 def test_deck_5_players():
@@ -53,3 +53,22 @@ def test_deck_3_players():
     # last_round has exactly 15 cards after it
     last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
     assert len(deck) - last_round_index - 1 == 15
+    
+    
+def test_create_players():
+    players = create_players(["Mario", "Luca", "Anna"])
+    
+    # correct number of players
+    assert len(players) == 3
+    
+    # correct names
+    assert players[0].name == "Mario"
+    assert players[1].name == "Luca"
+    assert players[2].name == "Anna"
+    
+    # all players start with empty cards and jokers
+    for player in players:
+        assert len(player.cards) == 0
+        assert len(player.jokers) == 0
+        assert player.passed == False
+        assert player.active == True
