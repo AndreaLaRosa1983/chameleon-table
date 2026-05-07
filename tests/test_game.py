@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors
 from backend.models import CardType
 
 def test_deck_5_players():
@@ -83,3 +83,16 @@ def test_create_rows():
     for row in rows:
         assert len(row.cards) == 0
         assert row.taken_by is None
+
+def test_assign_initial_colors():
+    players = create_players(["Mario", "Luca", "Anna"])
+    assign_initial_colors(players)
+    
+    # every player has exactly one card
+    for player in players:
+        assert len(player.cards) == 1
+        assert player.cards[0].card_type == CardType.COLOR
+    
+    # all colors are different
+    colors = [player.cards[0].color for player in players]
+    assert len(set(colors)) == len(players)
