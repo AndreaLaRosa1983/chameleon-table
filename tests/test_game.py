@@ -23,9 +23,10 @@ def test_deck_5_players():
     # exactly 1 last_round card
     last_round_cards = [c for c in deck if c.card_type == CardType.LAST_ROUND]
     assert len(last_round_cards) == 1
-    
-    # last_round is exactly at position -15 from the bottom
-    assert deck[-15].card_type == CardType.LAST_ROUND
+
+    # last_round has exactly 15 cards after it
+    last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
+    assert len(deck) - last_round_index - 1 == 15
 
 def test_deck_3_players():
     deck = create_deck(3)
@@ -45,5 +46,10 @@ def test_deck_3_players():
     assert len([c for c in deck if c.card_type == CardType.PLUS2]) == 10
     assert len([c for c in deck if c.card_type == CardType.JOKER]) == 3
     
-    # last_round at position -15
-    assert deck[-15].card_type == CardType.LAST_ROUNDpytest -vars
+    # exactly 1 last_round card
+    last_round_cards = [c for c in deck if c.card_type == CardType.LAST_ROUND]
+    assert len(last_round_cards) == 1
+
+    # last_round has exactly 15 cards after it
+    last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
+    assert len(deck) - last_round_index - 1 == 15
