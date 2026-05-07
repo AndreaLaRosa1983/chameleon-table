@@ -30,8 +30,8 @@ def create_deck(num_players: int) -> list[Card]:
     
     return deck
 
-
-
 def create_players(player_names: list[str]) -> list[Player]:
     return [Player(name=name) for name in player_names]
 
+def create_rows(num_players: int) -> list[Row]:
+    return [Row() for _ in range(num_players)]

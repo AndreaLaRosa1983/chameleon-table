@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players
+from backend.game import create_deck, create_players, create_rows
 from backend.models import CardType
 
 def test_deck_5_players():
@@ -72,3 +72,14 @@ def test_create_players():
         assert len(player.jokers) == 0
         assert player.passed == False
         assert player.active == True
+        
+def test_create_rows():
+    rows = create_rows(4)
+    
+    # correct number of rows
+    assert len(rows) == 4
+    
+    # all rows are empty
+    for row in rows:
+        assert len(row.cards) == 0
+        assert row.taken_by is None
