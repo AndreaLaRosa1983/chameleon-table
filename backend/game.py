@@ -29,3 +29,9 @@ def create_deck(num_players: int) -> list[Card]:
     deck.insert(len(deck) - 15, Card(card_type=CardType.LAST_ROUND))
     
     return deck
+
+
+
+def create_players(player_names: list[str]) -> list[Player]:
+    return [Player(name=name) for name in player_names]
+
