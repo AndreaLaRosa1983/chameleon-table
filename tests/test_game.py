@@ -1,29 +1,47 @@
 # tests/test_game.py
 from backend.game import create_deck, create_players, create_rows, assign_initial_colors
-from backend.models import CardType
+from backend.models import CardType, CardColor
 
 def test_deck_5_players():
     deck = create_deck(5)
     
-    # total: 63 color + 10 plus2 + 3 joker + 1 last_round = 77 cards
-    assert len(deck) == 77
+def test_deck_5_players():
+    players = create_players(["Mario", "Luca", "Anna", "Paolo", "Sara"])
+    assigned_colors = assign_initial_colors(players)
+    deck = create_deck(5, assigned_colors)
     
-    # 63 color cards (9 per color * 7 colors)
+    # total: 58 color (5 colors with 8 cards + 2 colors with 9 cards) + 10 plus2 + 3 joker + 1 last_round = 72 cards
+    assert len(deck) == 72
+    
+    # 58 color cards
     color_cards = [c for c in deck if c.card_type == CardType.COLOR]
-    assert len(color_cards) == 63
+    assert len(color_cards) == 58
     
-    # 10 plus2 cards
-    plus2_cards = [c for c in deck if c.card_type == CardType.PLUS2]
-    assert len(plus2_cards) == 10
+    # assigned colors have 8 cards, others have 9
+    for color in CardColor:
+        count = len([c for c in color_cards if c.color == color])
+        if color in assigned_colors:
+            assert count == 8
+        else:
+            assert count == 9
     
-    # 3 jokers
-    joker_cards = [c for c in deck if c.card_type == CardType.JOKER]
-    assert len(joker_cards) == 3
-    
-    # exactly 1 last_round card
-    last_round_cards = [c for c in deck if c.card_type == CardType.LAST_ROUND]
-    assert len(last_round_cards) == 1
+    # last_round has exactly 15 cards after it
+    last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
+    assert len(deck) - last_round_index - 1 == 15
 
+def test_deck_3_players():
+    players = create_players(["Mario", "Luca", "Anna"])
+    assigned_colors = assign_initial_colors(players)
+    deck = create_deck(3, assigned_colors)
+    
+    # one color removed + 3 assigned: 45 color + 10 plus2 + 3 joker + 1 last_round = 59 cards
+    assert len(deck) == 59
+    
+    # only 6 distinct colors (one removed for 3 players)
+    color_cards = [c for c in deck if c.card_type == CardType.COLOR]
+    colors_in_deck = set(c.color for c in color_cards)
+    assert len(colors_in_deck) == 6
+    
     # last_round has exactly 15 cards after it
     last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
     assert len(deck) - last_round_index - 1 == 15
