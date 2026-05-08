@@ -44,4 +44,24 @@ def assign_initial_colors(players: list[Player]) -> list[CardColor]:
     return colors
 
 def create_game(room_code: str, player_names: list[str]) -> GameState:
-    pass
+    
+    players = create_players(player_names)
+    
+    n_players = len(players)
+    
+    assigned_color = assign_initial_colors(players)
+    deck = create_deck(n_players,assigned_color)
+    rows = create_rows(n_players)
+    
+    start = random.randint(0, n_players - 1)
+    turn_order = player_names[start:] + player_names[:start]
+    
+    return GameState(
+    room_code=room_code,
+    deck=deck,
+    rows=rows,
+    players=players,
+    turn_order=turn_order,
+    round_starter=turn_order[0],
+    phase=GamePhase.WAITING
+    )
