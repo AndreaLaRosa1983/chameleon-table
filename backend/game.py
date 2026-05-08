@@ -37,7 +37,9 @@ def create_rows(num_players: int) -> list[Row]:
     return [Row() for _ in range(num_players)]
 
 def assign_initial_colors(players: list[Player]) -> list[CardColor]:
+    
     colors = random.sample(list(CardColor), len(players))
+    
     for player, color in zip(players, colors):
         player.cards.append(Card(card_type=CardType.COLOR, color=color))
     return colors
