@@ -42,3 +42,6 @@ def assign_initial_colors(players: list[Player]) -> list[CardColor]:
     for player, color in zip(players, colors):
         player.cards.append(Card(card_type=CardType.COLOR, color=color))
     return colors
+
+def create_game(room_code: str, player_names: list[str]) -> GameState:
+    pass

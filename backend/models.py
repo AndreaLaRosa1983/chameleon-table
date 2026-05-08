@@ -70,4 +70,5 @@ class GameState:
     phase: GamePhase = GamePhase.WAITING
     history: list[GameEvent] = field(default_factory=list)
     round_starter: Optional[str] = None
-    min_players: int = 2                                       # if active players drop below this, game is aborted
+    min_players: int = 2       
+    

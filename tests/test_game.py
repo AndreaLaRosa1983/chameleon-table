@@ -1,6 +1,6 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors
-from backend.models import CardType, CardColor
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game
+from backend.models import CardType, CardColor, Player, GameState, GamePhase
     
 def test_deck_5_players():
     players = create_players(["Mario", "Luca", "Anna", "Paolo", "Sara"])
@@ -84,3 +84,32 @@ def test_assign_initial_colors():
     # all colors are different
     colors = [player.cards[0].color for player in players]
     assert len(set(colors)) == len(players)
+    
+def test_create_game_basic_structure():
+    state = create_game("ROOM1", ["Alice", "Bob", "Charlie"])
+    assert isinstance(state, GameState)
+    assert state.phase == GamePhase.WAITING
+    assert len(state.players) == 3
+    assert len(state.rows) == 3
+    assert state.round_starter == state.turn_order[0]
+    assert set(state.turn_order) == {"Alice", "Bob", "Charlie"}
+
+
+def test_create_game_deck_and_colors():
+    state = create_game("ROOM1", ["Alice", "Bob", "Charlie"])
+    assert len(state.deck) > 0
+    assert any(c.card_type == CardType.LAST_ROUND for c in state.deck)
+    colors = [p.cards[0].color for p in state.players]
+    assert len(colors) == len(set(colors))
+
+
+def test_create_game_two_players():
+    state = create_game("ROOM1", ["Alice", "Bob"])
+    assert len(state.players) == 2
+    assert len(state.rows) == 2
+
+
+def test_create_game_five_players():
+    state = create_game("ROOM1", ["Alice", "Bob", "Charlie", "Dave", "Eve"])
+    assert len(state.players) == 5
+    assert len(state.rows) == 5
