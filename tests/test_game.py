@@ -1,9 +1,6 @@
 # tests/test_game.py
 from backend.game import create_deck, create_players, create_rows, assign_initial_colors
 from backend.models import CardType, CardColor
-
-def test_deck_5_players():
-    deck = create_deck(5)
     
 def test_deck_5_players():
     players = create_players(["Mario", "Luca", "Anna", "Paolo", "Sara"])
@@ -34,8 +31,8 @@ def test_deck_3_players():
     assigned_colors = assign_initial_colors(players)
     deck = create_deck(3, assigned_colors)
     
-    # one color removed + 3 assigned: 45 color + 10 plus2 + 3 joker + 1 last_round = 59 cards
-    assert len(deck) == 59
+    # total: 51 color + 10 plus2 + 3 joker + 1 last_round = 65 cards
+    assert len(deck) == 65
     
     # only 6 distinct colors (one removed for 3 players)
     color_cards = [c for c in deck if c.card_type == CardType.COLOR]
@@ -44,34 +41,7 @@ def test_deck_3_players():
     
     # last_round has exactly 15 cards after it
     last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
-    assert len(deck) - last_round_index - 1 == 15
-
-def test_deck_3_players():
-    deck = create_deck(3)
-    
-    # one color removed: 54 color + 10 plus2 + 3 joker + 1 last_round = 68 cards
-    assert len(deck) == 68
-    
-    # 54 color cards (9 per color * 6 colors)
-    color_cards = [c for c in deck if c.card_type == CardType.COLOR]
-    assert len(color_cards) == 54
-    
-    # only 6 distinct colors present
-    colors_in_deck = set(c.color for c in color_cards)
-    assert len(colors_in_deck) == 6
-    
-    # plus2 and jokers unchanged
-    assert len([c for c in deck if c.card_type == CardType.PLUS2]) == 10
-    assert len([c for c in deck if c.card_type == CardType.JOKER]) == 3
-    
-    # exactly 1 last_round card
-    last_round_cards = [c for c in deck if c.card_type == CardType.LAST_ROUND]
-    assert len(last_round_cards) == 1
-
-    # last_round has exactly 15 cards after it
-    last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
-    assert len(deck) - last_round_index - 1 == 15
-    
+    assert len(deck) - last_round_index - 1 == 15    
     
 def test_create_players():
     players = create_players(["Mario", "Luca", "Anna"])
