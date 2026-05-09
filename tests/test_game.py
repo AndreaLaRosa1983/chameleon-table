@@ -1,7 +1,9 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn
-from backend.models import CardType, CardColor, Player, GameState, GamePhase
-    
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn,take_row
+from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
+import pytest
+
+ 
 def test_deck_5_players():
     players = create_players(["Mario", "Luca", "Anna", "Paolo", "Sara"])
     assigned_colors = assign_initial_colors(players)
@@ -153,3 +155,49 @@ def test_current_turn_returns_none_when_all_passed_or_inactive():
 def test_current_turn_empty_turn_order():
     state = GameState(room_code="TEST")
     assert current_turn(state) is None
+    
+def make_game_state_for_take_row() -> GameState:
+    # Helper: creates a GameState ready for take_row tests.
+    players = [
+        Player(name="Alice"),
+        Player(name="Bob"),
+        Player(name="Charlie"),
+    ]
+    rows = [
+        Row(cards=[Card(card_type=CardType.COLOR, color=CardColor.RED)]),
+        Row(cards=[Card(card_type=CardType.COLOR, color=CardColor.BLUE)]),
+        Row(cards=[Card(card_type=CardType.COLOR, color=CardColor.GREEN)]),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        turn_order=["Alice", "Bob", "Charlie"],
+        round_starter="Alice"
+    )
+    
+def test_take_row_adds_cards_to_player():
+    state = make_game_state_for_take_row()
+    take_row(state, "Alice", 0)
+    alice = next(p for p in state.players if p.name == "Alice")
+    assert len(alice.cards) == 1
+    assert alice.cards[0].color == CardColor.RED
+
+
+def test_take_row_sets_player_passed():
+    state = make_game_state_for_take_row()
+    take_row(state, "Alice", 0)
+    alice = next(p for p in state.players if p.name == "Alice")
+    assert alice.passed == True
+
+
+def test_take_row_marks_row_as_taken():
+    state = make_game_state_for_take_row()
+    take_row(state, "Alice", 0)
+    assert state.rows[0].taken_by == "Alice"
+
+
+def test_take_row_not_your_turn_raises():
+    state = make_game_state_for_take_row()
+    with pytest.raises(ValueError):
+        take_row(state, "Bob", 0)

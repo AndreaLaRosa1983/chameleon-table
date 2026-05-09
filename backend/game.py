@@ -72,3 +72,22 @@ def current_turn(state: GameState) -> Optional[str]:
         if player and not player.passed and player.active:
             return name
     return None
+
+def take_row(state: GameState, player_name: str, row_index: int) -> GameState:
+    if current_turn(state) != player_name:
+        raise ValueError("Not your turn")
+    
+    row = state.rows[row_index]
+    
+    if len(row.cards) == 0:
+        raise ValueError("Row is empty")
+    
+    if row.taken_by is not None:
+        raise ValueError("Row already taken")
+    
+    player = next(p for p in state.players if p.name == player_name)
+    player.cards.extend(row.cards)
+    player.passed = True
+    row.taken_by = player_name
+    
+    return state
