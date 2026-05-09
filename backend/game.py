@@ -1,6 +1,6 @@
 import random
 from backend.models import Card, Row, Player, GameState, GameEvent, CardType, CardColor, GamePhase, GameAction
-
+from typing import Optional
 
 def create_deck(num_players: int, assigned_colors: list[CardColor]) -> list[Card]:
     deck = []
@@ -65,3 +65,10 @@ def create_game(room_code: str, player_names: list[str]) -> GameState:
     round_starter=turn_order[0],
     phase=GamePhase.WAITING
     )
+    
+def current_turn(state: GameState) -> Optional[str]:
+    for name in state.turn_order:
+        player = next((p for p in state.players if p.name == name), None)
+        if player and not player.passed and player.active:
+            return name
+    return None

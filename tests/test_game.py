@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn
 from backend.models import CardType, CardColor, Player, GameState, GamePhase
     
 def test_deck_5_players():
@@ -113,3 +113,43 @@ def test_create_game_five_players():
     state = create_game("ROOM1", ["Alice", "Bob", "Charlie", "Dave", "Eve"])
     assert len(state.players) == 5
     assert len(state.rows) == 5
+
+
+def make_state(player_configs: list[dict]) -> GameState:
+    # Helper: creates minimal GameState with players and turn_order
+    players = []
+    for cfg in player_configs:
+        p = Player(name=cfg["name"])
+        p.passed = cfg.get("passed", False)
+        p.active = cfg.get("active", True)
+        players.append(p)
+
+    return GameState(
+        room_code="TEST",
+        players=players,
+        turn_order=[cfg["name"] for cfg in player_configs]
+    )
+
+
+def test_current_turn_returns_first_player():
+    state = make_state([{"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"}])
+    assert current_turn(state) == "Alice"
+
+def test_current_turn_skips_passed_and_inactive():
+    state = make_state([
+        {"name": "Alice", "passed": True},
+        {"name": "Bob", "active": False},
+        {"name": "Charlie"},
+    ])
+    assert current_turn(state) == "Charlie"
+
+def test_current_turn_returns_none_when_all_passed_or_inactive():
+    state = make_state([
+        {"name": "Alice", "passed": True},
+        {"name": "Bob", "active": False},
+    ])
+    assert current_turn(state) is None
+
+def test_current_turn_empty_turn_order():
+    state = GameState(room_code="TEST")
+    assert current_turn(state) is None
