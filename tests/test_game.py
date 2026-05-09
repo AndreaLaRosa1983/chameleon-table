@@ -201,3 +201,26 @@ def test_take_row_not_your_turn_raises():
     state = make_game_state_for_take_row()
     with pytest.raises(ValueError):
         take_row(state, "Bob", 0)
+        
+def test_take_row_jokers_go_to_player_jokers():
+    players = [Player(name="Alice"), Player(name="Bob"), Player(name="Charlie")]
+    rows = [
+        Row(cards=[
+            Card(card_type=CardType.COLOR, color=CardColor.RED),
+            Card(card_type=CardType.JOKER),
+        ]),
+        Row(cards=[Card(card_type=CardType.COLOR, color=CardColor.BLUE)]),
+        Row(cards=[Card(card_type=CardType.COLOR, color=CardColor.GREEN)]),
+    ]
+    state = GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        turn_order=["Alice", "Bob", "Charlie"],
+        round_starter="Alice"
+    )
+    take_row(state, "Alice", 0)
+    alice = next(p for p in state.players if p.name == "Alice")
+    assert len(alice.cards) == 1
+    assert len(alice.jokers) == 1
+    assert alice.jokers[0].card_type == CardType.JOKER

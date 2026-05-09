@@ -86,7 +86,12 @@ def take_row(state: GameState, player_name: str, row_index: int) -> GameState:
         raise ValueError("Row already taken")
     
     player = next(p for p in state.players if p.name == player_name)
-    player.cards.extend(row.cards)
+    
+    for card in row.cards:
+        if card.card_type == CardType.JOKER:
+            player.jokers.append(card)
+        else:
+            player.cards.append(card)
     player.passed = True
     row.taken_by = player_name
     
