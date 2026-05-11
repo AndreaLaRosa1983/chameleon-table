@@ -386,3 +386,52 @@ def test_place_card_row_not_available_raises():
     card = Card(card_type=CardType.COLOR, color=CardColor.RED)
     with pytest.raises(ValueError):
         place_card(state, "Alice", 0, card)
+        
+def make_players_for_calculate_score() -> list[Player]:
+    #Helper: creates 3 players with realistic card distributions.
+    
+    def make_color_cards(color: CardColor, count: int) -> list[Card]:
+        return [Card(card_type=CardType.COLOR, color=color) for _ in range(count)]
+    
+    def make_plus2_cards(count: int) -> list[Card]:
+        return [Card(card_type=CardType.PLUS2) for _ in range(count)]
+    
+    def make_joker_cards(count: int) -> list[Card]:
+        return [Card(card_type=CardType.JOKER) for _ in range(count)]
+    
+    alice = Player(name="Alice")
+    alice.cards = (
+        make_color_cards(CardColor.BLUE, 5) +
+        make_color_cards(CardColor.GREEN, 4) +
+        make_color_cards(CardColor.RED, 3) +
+        make_color_cards(CardColor.YELLOW, 1) +
+        make_color_cards(CardColor.PURPLE, 1) +
+        make_color_cards(CardColor.ORANGE, 1) +
+        make_plus2_cards(3)
+    )
+
+    bob = Player(name="Bob")
+    bob.cards = (
+        make_color_cards(CardColor.YELLOW, 4) +
+        make_color_cards(CardColor.RED, 3) +
+        make_color_cards(CardColor.ORANGE, 3) +
+        make_color_cards(CardColor.BLUE, 1) +
+        make_color_cards(CardColor.GREEN, 1) +
+        make_color_cards(CardColor.PURPLE, 2) +
+        make_plus2_cards(3)
+    )
+    bob.jokers = make_joker_cards(1)
+
+    charlie = Player(name="Charlie")
+    charlie.cards = (
+        make_color_cards(CardColor.PURPLE, 4) +
+        make_color_cards(CardColor.GREEN, 3) +
+        make_color_cards(CardColor.ORANGE, 3) +
+        make_color_cards(CardColor.RED, 2) +
+        make_color_cards(CardColor.BLUE, 1) +
+        make_color_cards(CardColor.YELLOW, 1) +
+        make_plus2_cards(3)
+    )
+    charlie.jokers = make_joker_cards(2)
+    
+    return [alice, bob, charlie]
