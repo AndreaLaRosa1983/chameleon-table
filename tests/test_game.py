@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn, take_row, end_round, draw_card
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn, take_row, end_round, draw_card, place_card
 import pytest
 from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
 
@@ -289,7 +289,7 @@ def test_end_round_keeps_playing_if_not_last_round():
     assert state.phase == GamePhase.PLAYING
     
 def make_game_state_for_draw_card() -> GameState:
-    """Helper: creates a GameState ready for draw_card tests."""
+    #Helper: creates a GameState ready for draw_card tests.
     players = [
         Player(name="Alice"),
         Player(name="Bob"),
@@ -341,3 +341,48 @@ def test_draw_card_last_round_sets_flag():
     _, card = draw_card(state, "Alice")
     assert state.last_round == True
     assert card.card_type != CardType.LAST_ROUND
+    
+def make_game_state_for_place_card() -> GameState:
+    #Helper: creates a GameState ready for place_card tests.
+    players = [
+        Player(name="Alice"),
+        Player(name="Bob"),
+        Player(name="Charlie"),
+    ]
+    rows = [
+        Row(cards=[]),
+        Row(cards=[]),
+        Row(cards=[]),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        deck=[],
+        turn_order=["Alice", "Bob", "Charlie"],
+        round_starter="Alice",
+        phase=GamePhase.PLAYING
+    )
+
+
+def test_place_card_adds_card_to_row():
+    state = make_game_state_for_place_card()
+    card = Card(card_type=CardType.COLOR, color=CardColor.RED)
+    place_card(state, "Alice", 0, card)
+    assert len(state.rows[0].cards) == 1
+    assert state.rows[0].cards[0].color == CardColor.RED
+
+
+def test_place_card_not_your_turn_raises():
+    state = make_game_state_for_place_card()
+    card = Card(card_type=CardType.COLOR, color=CardColor.RED)
+    with pytest.raises(ValueError):
+        place_card(state, "Bob", 0, card)
+
+
+def test_place_card_row_not_available_raises():
+    state = make_game_state_for_place_card()
+    state.rows[0].taken_by = "Bob"
+    card = Card(card_type=CardType.COLOR, color=CardColor.RED)
+    with pytest.raises(ValueError):
+        place_card(state, "Alice", 0, card)

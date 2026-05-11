@@ -108,9 +108,6 @@ def end_round(state: GameState) -> GameState:
         state.phase = GamePhase.FINISHED
     return state
 
-def is_row_full(row: Row) -> bool:
-    return len(row.cards) >= 3
-
 def is_row_available_for_placement(row: Row) -> bool:
     return row.taken_by is None and len(row.cards) < 3
 
@@ -124,3 +121,12 @@ def draw_card(state: GameState, player_name: str) -> tuple[GameState, Card]:
         card = state.deck.pop(0)
     
     return state, card
+
+def place_card(state: GameState, player_name: str, row_index: int, card: Card) -> GameState:
+    if player_name != current_turn(state):
+        raise ValueError("Not your turn")
+    if not is_row_available_for_placement(state.rows[row_index]):
+        raise ValueError("Row taken or full")
+    
+    state.rows[row_index].cards.append(card)
+    return state
