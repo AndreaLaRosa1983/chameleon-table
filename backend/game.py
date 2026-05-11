@@ -94,5 +94,23 @@ def take_row(state: GameState, player_name: str, row_index: int) -> GameState:
             player.cards.append(card)
     player.passed = True
     row.taken_by = player_name
-    
+    state.last_row_taker = player_name
     return state
+
+def end_round(state: GameState) -> GameState:
+    for player in state.players: 
+        player.passed = False
+    state.rows = create_rows(len(state.players))
+    state.round_starter = state.last_row_taker
+    start = state.turn_order.index(state.round_starter)
+    state.turn_order = state.turn_order[start:] + state.turn_order[:start]
+    if state.last_round:
+        state.phase = GamePhase.FINISHED
+    return state
+
+def is_row_full(row: Row) -> bool:
+    return len(row.cards) >= 3
+
+def is_row_available_for_placement(row: Row) -> bool:
+    return row.taken_by is None and len(row.cards) < 3
+

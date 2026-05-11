@@ -1,7 +1,7 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn,take_row
-from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn, take_row, end_round, draw_card
 import pytest
+from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
 
  
 def test_deck_5_players():
@@ -94,6 +94,7 @@ def test_create_game_basic_structure():
     assert len(state.players) == 3
     assert len(state.rows) == 3
     assert state.round_starter == state.turn_order[0]
+    assert state.last_row_taker is None
     assert set(state.turn_order) == {"Alice", "Bob", "Charlie"}
 
 
@@ -224,3 +225,119 @@ def test_take_row_jokers_go_to_player_jokers():
     assert len(alice.cards) == 1
     assert len(alice.jokers) == 1
     assert alice.jokers[0].card_type == CardType.JOKER
+    
+def make_game_state_for_end_round(last_round: bool = False) -> GameState:
+    """Helper: creates a GameState where all players have passed."""
+    players = [
+        Player(name="Alice", passed=True),
+        Player(name="Bob", passed=True),
+        Player(name="Charlie", passed=True),
+    ]
+    rows = [
+        Row(cards=[], taken_by="Bob"),
+        Row(cards=[], taken_by="Alice"),
+        Row(cards=[], taken_by="Charlie"),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        turn_order=["Alice", "Bob", "Charlie"],
+        round_starter="Alice",
+        last_row_taker="Charlie",
+        last_round=last_round,
+        phase=GamePhase.PLAYING
+    )
+
+
+def test_end_round_resets_passed():
+    state = make_game_state_for_end_round()
+    end_round(state)
+    for player in state.players:
+        assert player.passed == False
+
+
+def test_end_round_clears_rows():
+    state = make_game_state_for_end_round()
+    end_round(state)
+    for row in state.rows:
+        assert row.taken_by is None
+        assert len(row.cards) == 0
+
+
+def test_end_round_updates_round_starter():
+    state = make_game_state_for_end_round()
+    end_round(state)
+    assert state.round_starter == "Charlie"
+
+
+def test_end_round_rotates_turn_order():
+    state = make_game_state_for_end_round()
+    end_round(state)
+    assert state.turn_order[0] == "Charlie"
+
+
+def test_end_round_sets_finished_if_last_round():
+    state = make_game_state_for_end_round(last_round=True)
+    end_round(state)
+    assert state.phase == GamePhase.FINISHED
+
+
+def test_end_round_keeps_playing_if_not_last_round():
+    state = make_game_state_for_end_round(last_round=False)
+    end_round(state)
+    assert state.phase == GamePhase.PLAYING
+    
+def make_game_state_for_draw_card() -> GameState:
+    """Helper: creates a GameState ready for draw_card tests."""
+    players = [
+        Player(name="Alice"),
+        Player(name="Bob"),
+        Player(name="Charlie"),
+    ]
+    rows = [
+        Row(cards=[]),
+        Row(cards=[]),
+        Row(cards=[]),
+    ]
+    deck = [
+        Card(card_type=CardType.COLOR, color=CardColor.RED),
+        Card(card_type=CardType.COLOR, color=CardColor.BLUE),
+        Card(card_type=CardType.COLOR, color=CardColor.GREEN),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        deck=deck,
+        turn_order=["Alice", "Bob", "Charlie"],
+        round_starter="Alice",
+        phase=GamePhase.PLAYING
+    )
+
+
+def test_draw_card_returns_card():
+    state = make_game_state_for_draw_card()
+    _, card = draw_card(state, "Alice")
+    assert card.card_type == CardType.COLOR
+    assert card.color == CardColor.RED
+
+
+def test_draw_card_removes_card_from_deck():
+    state = make_game_state_for_draw_card()
+    draw_card(state, "Alice")
+    assert len(state.deck) == 2
+
+
+def test_draw_card_not_your_turn_raises():
+    state = make_game_state_for_draw_card()
+    with pytest.raises(ValueError):
+        draw_card(state, "Bob")
+
+
+def test_draw_card_last_round_sets_flag():
+    state = make_game_state_for_draw_card()
+    state.deck.insert(0, Card(card_type=CardType.LAST_ROUND))
+    _, card = draw_card(state, "Alice")
+    assert state.last_round == True
+    assert card.card_type != CardType.LAST_ROUND
