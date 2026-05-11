@@ -114,3 +114,13 @@ def is_row_full(row: Row) -> bool:
 def is_row_available_for_placement(row: Row) -> bool:
     return row.taken_by is None and len(row.cards) < 3
 
+def draw_card(state: GameState, player_name: str) -> tuple[GameState, Card]:
+    if player_name != current_turn(state):
+        raise ValueError("Not your turn")
+    
+    card = state.deck.pop(0)
+    if card.card_type == CardType.LAST_ROUND:
+        state.last_round = True
+        card = state.deck.pop(0)
+    
+    return state, card
