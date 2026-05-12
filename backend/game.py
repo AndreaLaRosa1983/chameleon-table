@@ -130,3 +130,43 @@ def place_card(state: GameState, player_name: str, row_index: int, card: Card) -
     
     state.rows[row_index].cards.append(card)
     return state
+
+def calculate_score(state: GameState) -> dict[str, int]:
+    SCORE_TABLE = {1: 1, 2: 3, 3: 6, 4: 10, 5: 15, 6: 21}
+    scores = {}
+    
+    for player in state.players:
+        # count cards by color
+        color_counts = {}
+        for card in player.cards:
+            if card.card_type == CardType.COLOR:
+                if card.color not in color_counts:
+                    color_counts[card.color] = 0
+                color_counts[card.color] += 1
+        
+        # sort by count descending
+        color_counts = dict(sorted(color_counts.items(), key=lambda x: x[1], reverse=True))
+        
+        # assign jokers to top 3 colors
+        for _ in player.jokers:
+            top3 = list(color_counts.keys())[:3]
+            min_color = min(top3, key=lambda c: color_counts[c])
+            color_counts[min_color] += 1
+            color_counts = dict(sorted(color_counts.items(), key=lambda x: x[1], reverse=True))
+        
+        # calculate score
+        score = 0
+        for i, (color, count) in enumerate(color_counts.items()):
+            points = SCORE_TABLE.get(count, 21)
+            if i < 3:
+                score += points
+            else:
+                score -= points
+        
+        # add plus2
+        plus2_count = sum(1 for card in player.cards if card.card_type == CardType.PLUS2)
+        score += plus2_count * 2
+        
+        scores[player.name] = score
+    
+    return scores

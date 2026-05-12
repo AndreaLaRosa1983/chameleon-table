@@ -1,5 +1,5 @@
 # tests/test_game.py
-from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn, take_row, end_round, draw_card, place_card
+from backend.game import create_deck, create_players, create_rows, assign_initial_colors, create_game, current_turn, take_row, end_round, draw_card, place_card, calculate_score
 import pytest
 from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
 
@@ -435,3 +435,46 @@ def make_players_for_calculate_score() -> list[Player]:
     charlie.jokers = make_joker_cards(2)
     
     return [alice, bob, charlie]
+
+def test_calculate_score_no_jokers():
+    players = make_players_for_calculate_score()
+    state = GameState(
+        room_code="TEST",
+        players=players,
+        phase=GamePhase.FINISHED
+    )
+    scores = calculate_score(state)
+    assert scores["Alice"] == 34
+
+
+def test_calculate_score_one_joker():
+    players = make_players_for_calculate_score()
+    state = GameState(
+        room_code="TEST",
+        players=players,
+        phase=GamePhase.FINISHED
+    )
+    scores = calculate_score(state)
+    assert scores["Bob"] == 27
+
+
+def test_calculate_score_two_jokers():
+    players = make_players_for_calculate_score()
+    state = GameState(
+        room_code="TEST",
+        players=players,
+        phase=GamePhase.FINISHED
+    )
+    scores = calculate_score(state)
+    assert scores["Charlie"] == 31
+
+
+def test_calculate_score_returns_all_players():
+    players = make_players_for_calculate_score()
+    state = GameState(
+        room_code="TEST",
+        players=players,
+        phase=GamePhase.FINISHED
+    )
+    scores = calculate_score(state)
+    assert set(scores.keys()) == {"Alice", "Bob", "Charlie"}
