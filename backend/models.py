@@ -73,3 +73,4 @@ class GameState:
     last_row_taker: Optional[str] = None
     min_players: int = 2       
     
+    
