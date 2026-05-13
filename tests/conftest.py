@@ -157,3 +157,16 @@ def make_players_for_calculate_score() -> list[Player]:
     charlie.jokers = make_joker_cards(2)
     
     return [alice, bob, charlie]
+
+def make_game_state_for_observers() -> GameState:
+    players = [
+        Player(name="Alice"),
+        Player(name="Bob"),
+        Player(name="Charlie"),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        turn_order=["Alice", "Bob", "Charlie"],
+        phase=GamePhase.WAITING
+    )
