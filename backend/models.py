@@ -3,6 +3,8 @@ from typing import Optional
 from enum import Enum
 import time
 
+MAX_OBSERVERS = 4
+
 class CardColor(Enum):
     RED = "red"
     BLUE = "blue"
@@ -71,6 +73,7 @@ class GameState:
     history: list[GameEvent] = field(default_factory=list)
     round_starter: Optional[str] = None
     last_row_taker: Optional[str] = None
-    min_players: int = 2       
-    
+    observers: list[str] = field(default_factory=list)
+    min_players: int = 2
+
     

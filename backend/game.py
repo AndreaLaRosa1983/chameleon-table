@@ -1,5 +1,5 @@
 import random
-from backend.models import Card, Row, Player, GameState, GameEvent, CardType, CardColor, GamePhase, GameAction
+from backend.models import MAX_OBSERVERS, Card, Row, Player, GameState, GameEvent, CardType, CardColor, GamePhase, GameAction
 from typing import Optional
 
 def create_deck(num_players: int, assigned_colors: list[CardColor]) -> list[Card]:
@@ -170,3 +170,19 @@ def calculate_score(state: GameState) -> dict[str, int]:
         scores[player.name] = score
     
     return scores
+
+def add_observer(state: GameState, player_name: str) -> GameState:
+    if len(state.observers) >= MAX_OBSERVERS:
+        raise ValueError("Room is full")
+    if player_name in state.observers:
+        raise ValueError("Already observing")
+    if any(p.name == player_name for p in state.players):
+        raise ValueError("Already a player")
+    state.observers.append(player_name)
+    return state
+
+def remove_observer(state: GameState, player_name: str) -> GameState:
+    if player_name not in state.observers:
+        raise ValueError("Not an observer")
+    state.observers.remove(player_name)
+    return state
