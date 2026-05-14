@@ -13,7 +13,11 @@ def create_deck(num_players: int, assigned_colors: list[CardColor]) -> list[Card
     if num_players == 3:
         color_to_remove = random.choice(list(set(CardColor) - set(assigned_colors)))
         deck = [card for card in deck if card.color != color_to_remove]
-    
+
+    if num_players == 2:
+        colors_to_remove = random.sample(list(set(CardColor) - set(assigned_colors)), 2)
+        deck = [card for card in deck if card.color not in colors_to_remove]
+
     for _ in range(3):
         deck.append(Card(card_type=CardType.JOKER))
         
@@ -33,15 +37,21 @@ def create_players(player_names: list[str]) -> list[Player]:
     return [Player(name=name) for name in player_names]
 
 def create_rows(num_players: int) -> list[Row]:
+    if num_players == 2:
+        return [Row(max_cards=1), Row(max_cards=2), Row(max_cards=3)]
     return [Row() for _ in range(num_players)]
 
 def assign_initial_colors(players: list[Player]) -> list[CardColor]:
+    n = len(players)
+    cards_per_player = 2 if n == 2 else 1
+    colors = random.sample(list(CardColor), n * cards_per_player)
     
-    colors = random.sample(list(CardColor), len(players))
+    for i, player in enumerate(players):
+        for j in range(cards_per_player):
+            color = colors[i * cards_per_player + j]
+            player.cards.append(Card(card_type=CardType.COLOR, color=color))
     
-    for player, color in zip(players, colors):
-        player.cards.append(Card(card_type=CardType.COLOR, color=color))
-    return colors
+    return colors[:n]
 
 def create_game(room_code: str, player_names: list[str]) -> GameState:
     
@@ -100,7 +110,7 @@ def take_row(state: GameState, player_name: str, row_index: int) -> GameState:
 def end_round(state: GameState) -> GameState:
     for player in state.players: 
         player.passed = False
-    state.rows = create_rows(len(state.players))
+    state.rows = create_rows(sum(1 for p in state.players if p.active))
     state.round_starter = state.last_row_taker
     start = state.turn_order.index(state.round_starter)
     state.turn_order = state.turn_order[start:] + state.turn_order[:start]
@@ -109,7 +119,7 @@ def end_round(state: GameState) -> GameState:
     return state
 
 def is_row_available_for_placement(row: Row) -> bool:
-    return row.taken_by is None and len(row.cards) < 3
+    return row.taken_by is None and len(row.cards) < row.max_cards
 
 def draw_card(state: GameState, player_name: str) -> tuple[GameState, Card]:
     if player_name != current_turn(state):

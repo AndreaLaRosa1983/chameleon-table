@@ -44,6 +44,7 @@ class Card:
 class Row:
     cards: list[Card] = field(default_factory=list)
     taken_by: Optional[str] = None
+    max_cards: int = 3
 
 @dataclass
 class Player:

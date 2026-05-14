@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from backend.models import CardColor, CardType, GamePhase
 class CardResponse(BaseModel):
@@ -28,3 +28,11 @@ class GameStateResponse(BaseModel):
     last_row_taker: Optional[str] = None
     observers: list[str] = []
     min_players: int = 2
+
+class CreateRoomRequest(BaseModel):
+    player_name: str
+    max_players: int = Field(ge=2, le=5)
+
+class CreateRoomResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse

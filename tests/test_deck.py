@@ -42,7 +42,27 @@ def test_deck_3_players():
     # last_round has exactly 15 cards after it
     last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
     assert len(deck) - last_round_index - 1 == 15    
+
+def test_deck_2_players():
+    players = create_players(["Alice", "Bob"])
+    assigned_colors = assign_initial_colors(players)
+    deck = create_deck(2, assigned_colors)
     
+    # only 5 distinct colors (two removed for 2 players)
+    color_cards = [c for c in deck if c.card_type == CardType.COLOR]
+    colors_in_deck = set(c.color for c in color_cards)
+    assert len(colors_in_deck) == 5
+    
+    # each player has 2 initial cards of different colors
+    assert len(players[0].cards) == 2
+    assert len(players[1].cards) == 2
+    assert players[0].cards[0].color != players[0].cards[1].color
+    assert players[1].cards[0].color != players[1].cards[1].color
+    
+    # last_round has exactly 15 cards after it
+    last_round_index = next(i for i, c in enumerate(deck) if c.card_type == CardType.LAST_ROUND)
+    assert len(deck) - last_round_index - 1 == 15
+
 def test_create_players():
     players = create_players(["Mario", "Luca", "Anna"])
     
@@ -107,7 +127,10 @@ def test_create_game_deck_and_colors():
 def test_create_game_two_players():
     state = create_game("ROOM1", ["Alice", "Bob"])
     assert len(state.players) == 2
-    assert len(state.rows) == 2
+    assert len(state.rows) == 3
+    assert state.rows[0].max_cards == 1
+    assert state.rows[1].max_cards == 2
+    assert state.rows[2].max_cards == 3
 
 
 def test_create_game_five_players():

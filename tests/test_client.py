@@ -4,6 +4,9 @@ from backend.main import app
 client = TestClient(app)
 
 def test_create_room():
-    response = client.post("/rooms", json={"player_name": "Alice", "min_players": 2})
+    response = client.post("/rooms", json={"player_name": "Alice", "max_players": 3})
     assert response.status_code == 200
-    assert "room_code" in response.json()
+    data = response.json()
+    assert "room_code" in data
+    assert "state" in data
+    assert data["state"]["phase"] == "waiting"

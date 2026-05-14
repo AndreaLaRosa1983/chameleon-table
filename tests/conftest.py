@@ -170,3 +170,24 @@ def make_game_state_for_observers() -> GameState:
         turn_order=["Alice", "Bob", "Charlie"],
         phase=GamePhase.WAITING
     )
+    
+def make_game_state_for_end_round_two_players() -> GameState:
+    players = [
+        Player(name="Alice", passed=True),
+        Player(name="Bob", passed=True),
+    ]
+    rows = [
+        Row(cards=[], taken_by="Alice", max_cards=1),
+        Row(cards=[], taken_by="Bob", max_cards=2),
+        Row(cards=[], taken_by=None, max_cards=3),
+    ]
+    return GameState(
+        room_code="TEST",
+        players=players,
+        rows=rows,
+        turn_order=["Alice", "Bob"],
+        round_starter="Alice",
+        last_row_taker="Bob",
+        last_round=False,
+        phase=GamePhase.PLAYING
+    )
