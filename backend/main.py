@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
-from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse
+from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse, JoinRoomRequest, JoinRoomResponse
 from backend.game import create_game
+from backend.models import GamePhase, Player
 import random
 import string
 
@@ -41,4 +42,21 @@ def create_room(request: CreateRoomRequest):
     return CreateRoomResponse(
         room_code=room_code,
         state=game_state_to_response(state)
+    )
+    
+@app.post("/rooms/{room_code}/join", response_model=JoinRoomResponse)
+def join_room(room_code: str, request: JoinRoomRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if games[room_code].phase != GamePhase.WAITING:
+        raise HTTPException(status_code=400, detail="Game already started")
+    if len(games[room_code].players) >= games[room_code].max_players:
+        raise HTTPException(status_code=400, detail="Room is full")
+    if any(p.name == request.player_name for p in games[room_code].players):
+        raise HTTPException(status_code=400, detail="Name already taken")
+    games[room_code].players.append(Player(name=request.player_name))
+    games[room_code].turn_order.append(request.player_name)
+    return JoinRoomResponse(
+        room_code=room_code,
+        state=game_state_to_response(games[room_code])
     )

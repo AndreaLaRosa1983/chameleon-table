@@ -36,3 +36,17 @@ class CreateRoomRequest(BaseModel):
 class CreateRoomResponse(BaseModel):
     room_code: str
     state: GameStateResponse
+    
+class JoinRoomRequest(BaseModel):
+    player_name: str
+
+class JoinRoomResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse
+    
+class StartRoomRequest(BaseModel):
+    player_name: str
+
+class StartRoomResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse
