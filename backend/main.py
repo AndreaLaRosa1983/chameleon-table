@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse, JoinRoomRequest, JoinRoomResponse
+from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse, JoinRoomRequest
+from backend.schemas import JoinRoomResponse,StartRoomRequest, StartRoomResponse, RoomStateResponse
 from backend.game import create_game
 from backend.models import GamePhase, Player
 import random
@@ -57,6 +58,31 @@ def join_room(room_code: str, request: JoinRoomRequest):
     games[room_code].players.append(Player(name=request.player_name))
     games[room_code].turn_order.append(request.player_name)
     return JoinRoomResponse(
+        room_code=room_code,
+        state=game_state_to_response(games[room_code])
+    )
+    
+@app.post("/rooms/{room_code}/start", response_model=StartRoomResponse)
+def start_room(room_code: str, request: StartRoomRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if games[room_code].phase != GamePhase.WAITING:
+        raise HTTPException(status_code=400, detail="Game already started")
+    if not any(p.name == request.player_name for p in games[room_code].players):
+        raise HTTPException(status_code=403, detail="Only a player can start the game")
+    if len(games[room_code].players) < 2:
+        raise HTTPException(status_code=400, detail="Not enough players")
+    games[room_code].phase = GamePhase.PLAYING
+    return StartRoomResponse(
+        room_code=room_code,
+        state=game_state_to_response(games[room_code])
+    )
+    
+@app.get("/rooms/{room_code}/state", response_model=RoomStateResponse)
+def room_state(room_code: str):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return RoomStateResponse(
         room_code=room_code,
         state=game_state_to_response(games[room_code])
     )

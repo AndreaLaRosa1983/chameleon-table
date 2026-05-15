@@ -50,3 +50,7 @@ class StartRoomRequest(BaseModel):
 class StartRoomResponse(BaseModel):
     room_code: str
     state: GameStateResponse
+    
+class RoomStateResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse

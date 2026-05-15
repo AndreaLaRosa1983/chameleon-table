@@ -48,3 +48,17 @@ def test_start_room_not_enough_players():
     room_code = response.json()["room_code"]
     response = client.post(f"/rooms/{room_code}/start", json={"player_name": "Alice"})
     assert response.status_code == 400
+    
+def test_get_room_state():
+    response = client.post("/rooms", json={"player_name": "Alice", "max_players": 3})
+    room_code = response.json()["room_code"]
+    response = client.get(f"/rooms/{room_code}/state")
+    assert response.status_code == 200
+    data = response.json()
+    assert "room_code" in data
+    assert "state" in data
+
+def test_get_room_state_not_found():
+    response = client.get("/rooms/XXXX/state")
+    assert response.status_code == 404
+    
