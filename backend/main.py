@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse, JoinRoomRequest
 from backend.schemas import JoinRoomResponse,StartRoomRequest, StartRoomResponse, RoomStateResponse
-from backend.game import create_game
+from backend.schemas import GameStateResponse, DrawCardRequest, DrawCardResponse, CardResponse
+from backend.game import create_game, draw_card
 from backend.models import GamePhase, Player
 import random
 import string
@@ -54,7 +55,7 @@ def join_room(room_code: str, request: JoinRoomRequest):
     if len(games[room_code].players) >= games[room_code].max_players:
         raise HTTPException(status_code=400, detail="Room is full")
     if any(p.name == request.player_name for p in games[room_code].players):
-        raise HTTPException(status_code=400, detail="Name already taken")
+        raise HTTPException(status_code=400, detail="Same Player Error")
     games[room_code].players.append(Player(name=request.player_name))
     games[room_code].turn_order.append(request.player_name)
     return JoinRoomResponse(
@@ -84,5 +85,23 @@ def room_state(room_code: str):
         raise HTTPException(status_code=404, detail="Room not found")
     return RoomStateResponse(
         room_code=room_code,
+        state=game_state_to_response(games[room_code])
+    )
+    
+@app.post("/rooms/{room_code}/draw", response_model=DrawCardResponse)
+def draw(room_code: str, request: DrawCardRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if games[room_code].phase != GamePhase.PLAYING:
+        raise HTTPException(status_code=400, detail="Game not started or ended")
+    if not any(p.name == request.player_name for p in games[room_code].players):
+        raise HTTPException(status_code=403, detail="Only a player can draw a card")
+    try:
+        state, card = draw_card(games[room_code], request.player_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    games[room_code] = state
+    return DrawCardResponse(
+        card=CardResponse(card_type=card.card_type, color=card.color),
         state=game_state_to_response(games[room_code])
     )

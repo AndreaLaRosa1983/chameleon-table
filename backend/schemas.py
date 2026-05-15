@@ -53,7 +53,7 @@ class StartRoomResponse(BaseModel):
     
 class RoomStateResponse(BaseModel):
     room_code: str
-    state: GameStateRespons
+    state: GameStateResponse
     
 class DrawCardRequest(BaseModel):
     player_name: str
