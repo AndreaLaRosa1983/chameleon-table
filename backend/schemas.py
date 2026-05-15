@@ -53,4 +53,32 @@ class StartRoomResponse(BaseModel):
     
 class RoomStateResponse(BaseModel):
     room_code: str
+    state: GameStateRespons
+    
+class DrawCardRequest(BaseModel):
+    player_name: str
+
+class DrawCardResponse(BaseModel):
+    card: CardResponse
+    state: GameStateResponse
+
+class PlaceCardRequest(BaseModel):
+    player_name: str
+    row_index: int
+    card: CardResponse
+
+class PlaceCardResponse(BaseModel):
+    state: GameStateResponse
+
+class TakeRowRequest(BaseModel):
+    player_name: str
+    row_index: int
+
+class TakeRowResponse(BaseModel):
+    state: GameStateResponse
+
+class LeaveRoomRequest(BaseModel):
+    player_name: str
+
+class LeaveRoomResponse(BaseModel):
     state: GameStateResponse
