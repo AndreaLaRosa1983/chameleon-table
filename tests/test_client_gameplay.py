@@ -57,3 +57,32 @@ def test_place_without_draw():
     current_player = state["turn_order"][0]
     response = client.post(f"/rooms/{room_code}/place", json={"player_name": current_player, "row_index": 0})
     assert response.status_code == 400
+    
+def test_take_row():
+    room_code = setup_game()
+    state = client.get(f"/rooms/{room_code}/state").json()["state"]
+    current_player = state["turn_order"][0]
+    client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
+    client.post(f"/rooms/{room_code}/place", json={"player_name": current_player, "row_index": 0})
+    response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": current_player, "row_index": 0})
+    assert response.status_code == 200
+    assert "state" in response.json()
+
+def test_take_row_not_your_turn():
+    room_code = setup_game()
+    state = client.get(f"/rooms/{room_code}/state").json()["state"]
+    wrong_player = state["turn_order"][1]
+    response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": wrong_player, "row_index": 0})
+    assert response.status_code == 400
+
+def test_take_row_room_not_found():
+    response = client.post("/rooms/XXXX/take-row", json={"player_name": "Alice", "row_index": 0})
+    assert response.status_code == 404
+
+def test_take_row_with_pending_card():
+    room_code = setup_game()
+    state = client.get(f"/rooms/{room_code}/state").json()["state"]
+    current_player = state["turn_order"][0]
+    client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
+    response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": current_player, "row_index": 0})
+    assert response.status_code == 400
