@@ -74,6 +74,7 @@ class GameState:
     history: list[GameEvent] = field(default_factory=list)
     round_starter: Optional[str] = None
     last_row_taker: Optional[str] = None
+    pending_card: Optional[Card] = None
     observers: list[str] = field(default_factory=list)
     min_players: int = 2
 

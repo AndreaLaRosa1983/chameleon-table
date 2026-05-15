@@ -65,7 +65,6 @@ class DrawCardResponse(BaseModel):
 class PlaceCardRequest(BaseModel):
     player_name: str
     row_index: int
-    card: CardResponse
 
 class PlaceCardResponse(BaseModel):
     state: GameStateResponse
