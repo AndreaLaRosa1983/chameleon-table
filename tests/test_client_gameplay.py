@@ -42,3 +42,18 @@ def test_draw_card_game_not_started():
     room_code = response.json()["room_code"]
     response = client.post(f"/rooms/{room_code}/draw", json={"player_name": "Alice"})
     assert response.status_code == 400
+
+def test_draw_twice_without_place():
+    room_code = setup_game()
+    state = client.get(f"/rooms/{room_code}/state").json()["state"]
+    current_player = state["turn_order"][0]
+    client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
+    response = client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
+    assert response.status_code == 400
+
+def test_place_without_draw():
+    room_code = setup_game()
+    state = client.get(f"/rooms/{room_code}/state").json()["state"]
+    current_player = state["turn_order"][0]
+    response = client.post(f"/rooms/{room_code}/place", json={"player_name": current_player, "row_index": 0})
+    assert response.status_code == 400
