@@ -81,3 +81,12 @@ class LeaveRoomRequest(BaseModel):
 
 class LeaveRoomResponse(BaseModel):
     state: GameStateResponse
+    
+class RoomSummary(BaseModel):
+    room_code: str
+    players: int
+    max_players: int
+    phase: GamePhase
+
+class RoomsListResponse(BaseModel):
+    rooms: list[RoomSummary]

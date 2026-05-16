@@ -86,3 +86,40 @@ def test_take_row_with_pending_card():
     client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
     response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": current_player, "row_index": 0})
     assert response.status_code == 400
+    
+def test_leave_room():
+    room_code = setup_game()
+    response = client.post(f"/rooms/{room_code}/leave", json={"player_name": "Alice"})
+    assert response.status_code == 200
+
+def test_leave_room_not_found():
+    response = client.post("/rooms/XXXX/leave", json={"player_name": "Alice"})
+    assert response.status_code == 404
+
+def test_leave_room_player_not_in_room():
+    room_code = setup_game()
+    response = client.post(f"/rooms/{room_code}/leave", json={"player_name": "Dave"})
+    assert response.status_code == 403
+
+def test_leave_room_aborts_game():
+    room_code = setup_game()
+    client.post(f"/rooms/{room_code}/leave", json={"player_name": "Alice"})
+    client.post(f"/rooms/{room_code}/leave", json={"player_name": "Bob"})
+    response = client.get(f"/rooms/{room_code}/state")
+    assert response.json()["state"]["phase"] == "aborted"
+    
+def test_get_rooms_waiting():
+    client.post("/rooms", json={"player_name": "Alice", "max_players": 3})
+    client.post("/rooms", json={"player_name": "Bob", "max_players": 2})
+    response = client.get("/rooms")
+    assert response.status_code == 200
+    assert "rooms" in response.json()
+    assert len(response.json()["rooms"]) >= 2
+
+def test_get_rooms_active():
+    room_code = setup_game()
+    response = client.get("/rooms/active")
+    assert response.status_code == 200
+    assert "rooms" in response.json()
+    codes = [r["room_code"] for r in response.json()["rooms"]]
+    assert room_code in codes

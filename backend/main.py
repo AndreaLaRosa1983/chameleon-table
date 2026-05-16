@@ -7,8 +7,8 @@ from backend.schemas import (
     DrawCardRequest, DrawCardResponse,
     PlaceCardRequest, PlaceCardResponse,
     TakeRowRequest, TakeRowResponse,
-    CardResponse
-)
+    CardResponse, LeaveRoomRequest, 
+    LeaveRoomResponse, RoomsListResponse, RoomSummary)
 from backend.game import create_game, draw_card, place_card, take_row
 from backend.models import GamePhase, Player
 import random
@@ -156,3 +156,49 @@ def take_row_endpoint(room_code: str, request: TakeRowRequest):
     return TakeRowResponse(
         state=game_state_to_response(games[room_code])
     )
+    
+@app.post("/rooms/{room_code}/leave", response_model=LeaveRoomResponse)
+def leave(room_code: str, request: LeaveRoomRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if not any(p.name == request.player_name for p in games[room_code].players):
+        raise HTTPException(status_code=403, detail="Player not in room")
+    player = next(p for p in games[room_code].players if p.name == request.player_name)
+    player.active = False
+    player.left = True
+    active_players = sum(1 for p in games[room_code].players if p.active)
+    initial_players = len(games[room_code].players)
+    if active_players <= initial_players - 2:
+        games[room_code].phase = GamePhase.ABORTED
+    games[room_code] = games[room_code]
+    return LeaveRoomResponse(
+        state=game_state_to_response(games[room_code])
+    )
+    
+@app.get("/rooms", response_model=RoomsListResponse)
+def get_rooms():
+    rooms = [
+        RoomSummary(
+            room_code=code,
+            players=len(state.players),
+            max_players=state.max_players,
+            phase=state.phase
+        )
+        for code, state in games.items()
+        if state.phase == GamePhase.WAITING
+    ]
+    return RoomsListResponse(rooms=rooms)
+
+@app.get("/rooms/active", response_model=RoomsListResponse)
+def get_rooms_active():
+    rooms = [
+        RoomSummary(
+            room_code=code,
+            players=len(state.players),
+            max_players=state.max_players,
+            phase=state.phase
+        )
+        for code, state in games.items()
+        if state.phase == GamePhase.PLAYING
+    ]
+    return RoomsListResponse(rooms=rooms)
