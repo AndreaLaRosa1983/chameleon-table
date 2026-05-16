@@ -123,3 +123,27 @@ def test_get_rooms_active():
     assert "rooms" in response.json()
     codes = [r["room_code"] for r in response.json()["rooms"]]
     assert room_code in codes
+    
+def test_observe_room():
+    room_code = setup_game()
+    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "Spectator1"})
+    assert response.status_code == 200
+    assert "Spectator1" in response.json()["state"]["observers"]
+
+def test_observe_room_not_found():
+    response = client.post("/rooms/XXXX/observe", json={"player_name": "Spectator1"})
+    assert response.status_code == 404
+
+def test_observe_room_already_player():
+    room_code = setup_game()
+    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "Alice"})
+    assert response.status_code == 400
+
+def test_observe_room_full():
+    room_code = setup_game()
+    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S1"})
+    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S2"})
+    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S3"})
+    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S4"})
+    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "S5"})
+    assert response.status_code == 400
