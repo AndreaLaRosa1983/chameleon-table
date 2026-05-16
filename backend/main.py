@@ -1,8 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from backend.schemas import CreateRoomRequest, CreateRoomResponse, GameStateResponse, JoinRoomRequest
-from backend.schemas import JoinRoomResponse,StartRoomRequest, StartRoomResponse, RoomStateResponse
-from backend.schemas import GameStateResponse, DrawCardRequest, DrawCardResponse, CardResponse, PlaceCardResponse, PlaceCardRequest
-from backend.game import create_game, draw_card, place_card
+from backend.schemas import (
+    CreateRoomRequest, CreateRoomResponse,
+    JoinRoomRequest, JoinRoomResponse,
+    StartRoomRequest, StartRoomResponse,
+    RoomStateResponse, GameStateResponse,
+    DrawCardRequest, DrawCardResponse,
+    PlaceCardRequest, PlaceCardResponse,
+    TakeRowRequest, TakeRowResponse,
+    CardResponse
+)
+from backend.game import create_game, draw_card, place_card, take_row
 from backend.models import GamePhase, Player
 import random
 import string
@@ -128,5 +135,24 @@ def place(room_code: str, request: PlaceCardRequest):
     state.pending_card = None
     games[room_code] = state
     return PlaceCardResponse(
+        state=game_state_to_response(games[room_code])
+    )
+    
+@app.post("/rooms/{room_code}/take-row", response_model=TakeRowResponse)
+def take_row_endpoint(room_code: str, request: TakeRowRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if games[room_code].phase != GamePhase.PLAYING:
+        raise HTTPException(status_code=400, detail="Game not started or ended")
+    if not any(p.name == request.player_name for p in games[room_code].players):
+        raise HTTPException(status_code=403, detail="Only a player can take a row")
+    if games[room_code].pending_card:
+        raise HTTPException(status_code=400, detail="There is a pending card, can't take a row")
+    try:
+        state = take_row(games[room_code], request.player_name, request.row_index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    games[room_code] = state
+    return TakeRowResponse(
         state=game_state_to_response(games[room_code])
     )
