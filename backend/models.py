@@ -77,6 +77,6 @@ class GameState:
     pending_card: Optional[Card] = None
     observers: list[str] = field(default_factory=list)
     min_players: int = 2
-    sequence_number: int = 0
+    sequence_number: int = 0 
 
     
