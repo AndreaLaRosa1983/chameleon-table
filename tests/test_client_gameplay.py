@@ -126,24 +126,41 @@ def test_get_rooms_active():
     
 def test_observe_room():
     room_code = setup_game()
-    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "Spectator1"})
+    response = client.post(f"/rooms/{room_code}/observe", json={"observer_name": "Spectator1"})
     assert response.status_code == 200
     assert "Spectator1" in response.json()["state"]["observers"]
 
 def test_observe_room_not_found():
-    response = client.post("/rooms/XXXX/observe", json={"player_name": "Spectator1"})
+    response = client.post("/rooms/XXXX/observe", json={"observer_name": "Spectator1"})
     assert response.status_code == 404
 
 def test_observe_room_already_player():
     room_code = setup_game()
-    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "Alice"})
+    response = client.post(f"/rooms/{room_code}/observe", json={"observer_name": "Alice"})
     assert response.status_code == 400
 
 def test_observe_room_full():
     room_code = setup_game()
-    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S1"})
-    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S2"})
-    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S3"})
-    client.post(f"/rooms/{room_code}/observe", json={"player_name": "S4"})
-    response = client.post(f"/rooms/{room_code}/observe", json={"player_name": "S5"})
+    client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S1"})
+    client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S2"})
+    client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S3"})
+    client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S4"})
+    response = client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S5"})
     assert response.status_code == 400
+    
+def test_sequence_number_increases_on_draw():
+    room_code = setup_game()
+    state_before = client.get(f"/rooms/{room_code}/state").json()["state"]
+    seq_before = state_before["sequence_number"]
+    current_player = state_before["turn_order"][0]
+    client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
+    state_after = client.get(f"/rooms/{room_code}/state").json()["state"]
+    assert state_after["sequence_number"] > seq_before
+
+def test_sequence_number_increases_on_leave():
+    room_code = setup_game()
+    state_before = client.get(f"/rooms/{room_code}/state").json()["state"]
+    seq_before = state_before["sequence_number"]
+    client.post(f"/rooms/{room_code}/leave", json={"player_name": "Alice"})
+    state_after = client.get(f"/rooms/{room_code}/state").json()["state"]
+    assert state_after["sequence_number"] > seq_before

@@ -8,8 +8,9 @@ from backend.schemas import (
     PlaceCardRequest, PlaceCardResponse,
     TakeRowRequest, TakeRowResponse,
     CardResponse, LeaveRoomRequest, 
-    LeaveRoomResponse, RoomsListResponse, RoomSummary)
-from backend.game import create_game, draw_card, place_card, take_row
+    LeaveRoomResponse, RoomsListResponse,
+    RoomSummary, ObserveRoomRequest, ObserveRoomResponse)
+from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round
 from backend.models import GamePhase, Player
 import random
 import string
@@ -17,6 +18,10 @@ import string
 app = FastAPI()
 
 games: dict={}
+
+
+def advance_sequence(room_code: str):
+    games[room_code].sequence_number += 1
 
 def generate_room_code() -> str:
     return "".join(random.choices(string.ascii_uppercase, k=4))
@@ -33,7 +38,8 @@ def game_state_to_response(state) -> GameStateResponse:
         round_starter=state.round_starter,
         last_row_taker=state.last_row_taker,
         observers=state.observers,
-        min_players=state.min_players
+        min_players=state.min_players,
+        sequence_number=state.sequence_number
     )
 
 @app.get("/health")
@@ -111,6 +117,7 @@ def draw(room_code: str, request: DrawCardRequest):
         raise HTTPException(status_code=400, detail=str(e))
     state.pending_card = card
     games[room_code] = state
+    advance_sequence(room_code)
     return DrawCardResponse(
         card=CardResponse(card_type=card.card_type, color=card.color),
         state=game_state_to_response(games[room_code])
@@ -134,6 +141,11 @@ def place(room_code: str, request: PlaceCardRequest):
         raise HTTPException(status_code=400, detail=str(e))
     state.pending_card = None
     games[room_code] = state
+    advance_sequence(room_code)
+    if all(p.passed for p in games[room_code].players if p.active):
+        state = end_round(games[room_code])
+        games[room_code] = state
+        advance_sequence(room_code)
     return PlaceCardResponse(
         state=game_state_to_response(games[room_code])
     )
@@ -153,6 +165,7 @@ def take_row_endpoint(room_code: str, request: TakeRowRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     games[room_code] = state
+    advance_sequence(room_code)
     return TakeRowResponse(
         state=game_state_to_response(games[room_code])
     )
@@ -171,6 +184,7 @@ def leave(room_code: str, request: LeaveRoomRequest):
     if active_players <= initial_players - 2:
         games[room_code].phase = GamePhase.ABORTED
     games[room_code] = games[room_code]
+    advance_sequence(room_code)
     return LeaveRoomResponse(
         state=game_state_to_response(games[room_code])
     )
@@ -202,3 +216,20 @@ def get_rooms_active():
         if state.phase == GamePhase.PLAYING
     ]
     return RoomsListResponse(rooms=rooms)
+
+@app.post("/rooms/{room_code}/observe", response_model=ObserveRoomResponse)
+def observe(room_code: str, request: ObserveRoomRequest):
+    if room_code not in games:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if games[room_code].phase != GamePhase.PLAYING:
+        raise HTTPException(status_code=400, detail="Game not started yet")
+    try:
+        state = add_observer(games[room_code], request.observer_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    games[room_code] = state
+    advance_sequence(room_code)
+    return ObserveRoomResponse(
+        room_code=room_code,
+        state=game_state_to_response(games[room_code])
+    )

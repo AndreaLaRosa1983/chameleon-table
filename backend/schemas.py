@@ -28,6 +28,7 @@ class GameStateResponse(BaseModel):
     last_row_taker: Optional[str] = None
     observers: list[str] = []
     min_players: int = 2
+    sequence_number: int = 0
 
 class CreateRoomRequest(BaseModel):
     player_name: str
@@ -90,3 +91,10 @@ class RoomSummary(BaseModel):
 
 class RoomsListResponse(BaseModel):
     rooms: list[RoomSummary]
+
+class ObserveRoomRequest(BaseModel):
+    observer_name: str
+
+class ObserveRoomResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse
