@@ -1,7 +1,17 @@
 from backend.schemas import GameStateResponse
 from backend.models import GameState
+from asyncio import Lock
+
 
 games: dict[str, GameState] = {}
+
+room_locks: dict[str, Lock] = {}
+
+def get_lock(room_code: str) -> Lock:
+    if room_code not in room_locks:
+        room_locks[room_code] = Lock()
+    return room_locks[room_code]
+
 
 def game_state_to_response(state) -> GameStateResponse:
     return GameStateResponse(

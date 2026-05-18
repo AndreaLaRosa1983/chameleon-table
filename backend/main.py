@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket
 from backend.ws_manager import manager
-from backend.state import games, game_state_to_response, advance_sequence
+from backend.state import games, game_state_to_response, advance_sequence, get_lock
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -14,20 +14,23 @@ from backend.schemas import (
     RoomSummary, ObserveRoomRequest, ObserveRoomResponse)
 from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round
 from backend.models import GamePhase, Player
+from backend.ws_routes import router as ws_router
 import random
 import string
 
 app = FastAPI()
 
+app.include_router(ws_router)
+
 def generate_room_code() -> str:
     return "".join(random.choices(string.ascii_uppercase, k=4))
 
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
 
 @app.post("/rooms", response_model=CreateRoomResponse)
-def create_room(request: CreateRoomRequest):
+async def create_room(request: CreateRoomRequest):
     room_code = generate_room_code()
     while room_code in games:
         room_code = generate_room_code()
@@ -40,7 +43,7 @@ def create_room(request: CreateRoomRequest):
     )
     
 @app.post("/rooms/{room_code}/join", response_model=JoinRoomResponse)
-def join_room(room_code: str, request: JoinRoomRequest):
+async def join_room(room_code: str, request: JoinRoomRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.WAITING:
@@ -57,7 +60,7 @@ def join_room(room_code: str, request: JoinRoomRequest):
     )
     
 @app.post("/rooms/{room_code}/start", response_model=StartRoomResponse)
-def start_room(room_code: str, request: StartRoomRequest):
+async def start_room(room_code: str, request: StartRoomRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.WAITING:
@@ -73,7 +76,7 @@ def start_room(room_code: str, request: StartRoomRequest):
     )
     
 @app.get("/rooms/{room_code}/state", response_model=RoomStateResponse)
-def room_state(room_code: str):
+async def room_state(room_code: str):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     return RoomStateResponse(
@@ -82,7 +85,7 @@ def room_state(room_code: str):
     )
     
 @app.post("/rooms/{room_code}/draw", response_model=DrawCardResponse)
-def draw(room_code: str, request: DrawCardRequest):
+async def draw(room_code: str, request: DrawCardRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.PLAYING:
@@ -98,6 +101,7 @@ def draw(room_code: str, request: DrawCardRequest):
     state.pending_card = card
     games[room_code] = state
     advance_sequence(room_code)
+    await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     return DrawCardResponse(
         card=CardResponse(card_type=card.card_type, color=card.color),
         state=game_state_to_response(games[room_code])
@@ -105,7 +109,7 @@ def draw(room_code: str, request: DrawCardRequest):
     
     
 @app.post("/rooms/{room_code}/place", response_model=PlaceCardResponse)
-def place(room_code: str, request: PlaceCardRequest):
+async def place(room_code: str, request: PlaceCardRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.PLAYING:
@@ -122,16 +126,18 @@ def place(room_code: str, request: PlaceCardRequest):
     state.pending_card = None
     games[room_code] = state
     advance_sequence(room_code)
+    await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     if all(p.passed for p in games[room_code].players if p.active):
         state = end_round(games[room_code])
         games[room_code] = state
         advance_sequence(room_code)
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     return PlaceCardResponse(
         state=game_state_to_response(games[room_code])
     )
     
 @app.post("/rooms/{room_code}/take-row", response_model=TakeRowResponse)
-def take_row_endpoint(room_code: str, request: TakeRowRequest):
+async def take_row_endpoint(room_code: str, request: TakeRowRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.PLAYING:
@@ -146,12 +152,13 @@ def take_row_endpoint(room_code: str, request: TakeRowRequest):
         raise HTTPException(status_code=400, detail=str(e))
     games[room_code] = state
     advance_sequence(room_code)
+    await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     return TakeRowResponse(
         state=game_state_to_response(games[room_code])
     )
     
 @app.post("/rooms/{room_code}/leave", response_model=LeaveRoomResponse)
-def leave(room_code: str, request: LeaveRoomRequest):
+async def leave(room_code: str, request: LeaveRoomRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if not any(p.name == request.player_name for p in games[room_code].players):
@@ -165,12 +172,13 @@ def leave(room_code: str, request: LeaveRoomRequest):
         games[room_code].phase = GamePhase.ABORTED
     games[room_code] = games[room_code]
     advance_sequence(room_code)
+    await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     return LeaveRoomResponse(
         state=game_state_to_response(games[room_code])
     )
     
 @app.get("/rooms", response_model=RoomsListResponse)
-def get_rooms():
+async def get_rooms():
     rooms = [
         RoomSummary(
             room_code=code,
@@ -184,7 +192,7 @@ def get_rooms():
     return RoomsListResponse(rooms=rooms)
 
 @app.get("/rooms/active", response_model=RoomsListResponse)
-def get_rooms_active():
+async def get_rooms_active():
     rooms = [
         RoomSummary(
             room_code=code,
@@ -198,7 +206,7 @@ def get_rooms_active():
     return RoomsListResponse(rooms=rooms)
 
 @app.post("/rooms/{room_code}/observe", response_model=ObserveRoomResponse)
-def observe(room_code: str, request: ObserveRoomRequest):
+async def observe(room_code: str, request: ObserveRoomRequest):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     if games[room_code].phase != GamePhase.PLAYING:
@@ -209,6 +217,7 @@ def observe(room_code: str, request: ObserveRoomRequest):
         raise HTTPException(status_code=400, detail=str(e))
     games[room_code] = state
     advance_sequence(room_code)
+    await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
     return ObserveRoomResponse(
         room_code=room_code,
         state=game_state_to_response(games[room_code])
