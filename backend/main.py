@@ -14,6 +14,7 @@ from backend.game import create_game, draw_card, place_card, take_row, add_obser
 from backend.models import GamePhase, Player
 import random
 import string
+from backend.ws_manager import manager
 
 app = FastAPI()
 
