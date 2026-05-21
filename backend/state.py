@@ -1,11 +1,13 @@
 from backend.schemas import GameStateResponse
 from backend.models import GameState
-from asyncio import Lock
+from asyncio import Lock, Task
 
 
 games: dict[str, GameState] = {}
 
 room_locks: dict[str, Lock] = {}
+
+disconnection_tasks: dict[str, Task] = {}
 
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
