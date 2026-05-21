@@ -6,10 +6,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://chameleon:password@db:5432/chameleon
+      - DATABASE_URL=postgresql+asyncpg://chameleon:password@db:5432/chameleon
     depends_on:
-      - db
-
+      db:
+        condition: service_healthy
+    
   frontend:
     build: ./frontend
     ports:
@@ -27,6 +28,11 @@ services:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chameleon"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db_data:
