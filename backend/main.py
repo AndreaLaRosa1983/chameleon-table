@@ -22,7 +22,7 @@ app = FastAPI()
 app.include_router(ws_router)
 
 def generate_room_code() -> str:
-    return "".join(random.choices(string.ascii_uppercase, k=4))
+    return "".join(random.choices(string.ascii_uppercase, k=6))
 
 @app.get("/health")
 async def health():
