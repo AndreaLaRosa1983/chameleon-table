@@ -50,3 +50,8 @@ def enum_handler(data):
 
 def serialize_gamestate(state: GameState) -> dict:
     return asdict(state, dict_factory=enum_handler)
+
+async def room_code_exists(room_code: str) -> bool:
+    async with AsyncSessionLocal() as session:
+        existing = await session.get(GameRecord, room_code)
+        return existing is not None

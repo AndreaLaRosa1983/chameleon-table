@@ -15,6 +15,7 @@ from backend.schemas import (
 from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round
 from backend.models import GamePhase, Player
 from backend.ws_routes import router as ws_router
+from backend.database import room_code_exists
 import random
 import string
 
@@ -31,8 +32,12 @@ async def health():
 @app.post("/rooms", response_model=CreateRoomResponse)
 async def create_room(request: CreateRoomRequest):
     room_code = generate_room_code()
-    while room_code in games:
+    attempts = 0
+    while room_code in games or await room_code_exists(room_code):
         room_code = generate_room_code()
+        attempts += 1
+        if attempts > 1000:
+            raise HTTPException(status_code=503, detail="No room codes available")
     state = create_game(room_code, [request.player_name])
     state.max_players = request.max_players
     games[room_code] = state
