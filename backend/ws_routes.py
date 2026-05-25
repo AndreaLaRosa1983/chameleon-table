@@ -3,6 +3,7 @@ from fastapi import APIRouter, WebSocket
 from backend.ws_manager import manager
 from backend.state import games, game_state_to_response, advance_sequence, get_lock, disconnection_tasks
 from backend.models import GamePhase
+from backend.state import handle_disconnection
 
 router = APIRouter()
 

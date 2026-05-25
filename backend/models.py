@@ -53,7 +53,7 @@ class Player:
     jokers: list[Card] = field(default_factory=list)  # kept separate, assigned to a color only at game end
     passed: bool = False                               # True if player passed this round, resets each round
     active: bool = True                                # False if player disconnected permanently
-
+    left: bool = False  # True if player voluntarily left the game
 @dataclass
 class GameEvent:
     player: str
@@ -77,6 +77,7 @@ class GameState:
     pending_card: Optional[Card] = None
     observers: list[str] = field(default_factory=list)
     min_players: int = 2
+    max_players: int = 5
     sequence_number: int = 0 
 
     

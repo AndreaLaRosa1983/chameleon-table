@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, WebSocket
 from backend.ws_manager import manager
-from backend.state import games, game_state_to_response, advance_sequence, get_lock
+from backend.state import games, game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -15,12 +15,31 @@ from backend.schemas import (
 from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round
 from backend.models import GamePhase, Player
 from backend.ws_routes import router as ws_router
-from backend.database import room_code_exists
+from backend.database import room_code_exists, init_db, load_active_games, save_game
 import random
 import string
+from asyncio import create_task
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-app.include_router(ws_router)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    await init_db()
+    active_games = await load_active_games()
+    for state in active_games:
+        state.sequence_number += 1
+        for player in state.players:
+            if player.active:
+                player.active = False
+        games[state.room_code] = state
+        for player in state.players:
+            if not player.left:
+                task = create_task(handle_disconnection(state.room_code, player.name))
+                disconnection_tasks[f"{state.room_code}_{player.name}"] = task
+    yield
+    # shutdown (vuoto per ora)
+app = FastAPI(lifespan=lifespan)  # ← fuori, a livello modulo
+app.include_router(ws_router)  
 
 def generate_room_code() -> str:
     return "".join(random.choices(string.ascii_uppercase, k=6))
@@ -76,6 +95,7 @@ async def start_room(room_code: str, request: StartRoomRequest):
         if len(games[room_code].players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
         games[room_code].phase = GamePhase.PLAYING
+        await save_game(room_code, games[room_code])
         return StartRoomResponse(
             room_code=room_code,
             state=game_state_to_response(games[room_code])
@@ -108,6 +128,7 @@ async def draw(room_code: str, request: DrawCardRequest):
         state.pending_card = card
         games[room_code] = state
         advance_sequence(room_code)
+        await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         return DrawCardResponse(
             card=CardResponse(card_type=card.card_type, color=card.color),
@@ -133,11 +154,13 @@ async def place(room_code: str, request: PlaceCardRequest):
         state.pending_card = None
         games[room_code] = state
         advance_sequence(room_code)
+        await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         if all(p.passed for p in games[room_code].players if p.active):
             state = end_round(games[room_code])
             games[room_code] = state
             advance_sequence(room_code)
+            await save_game(room_code, games[room_code])
             await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         return PlaceCardResponse(
             state=game_state_to_response(games[room_code])
@@ -160,6 +183,7 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest):
             raise HTTPException(status_code=400, detail=str(e))
         games[room_code] = state
         advance_sequence(room_code)
+        await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         return TakeRowResponse(
             state=game_state_to_response(games[room_code])
@@ -181,6 +205,7 @@ async def leave(room_code: str, request: LeaveRoomRequest):
             games[room_code].phase = GamePhase.ABORTED
         games[room_code] = games[room_code]
         advance_sequence(room_code)
+        await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         return LeaveRoomResponse(
             state=game_state_to_response(games[room_code])
@@ -227,8 +252,12 @@ async def observe(room_code: str, request: ObserveRoomRequest):
             raise HTTPException(status_code=400, detail=str(e))
         games[room_code] = state
         advance_sequence(room_code)
+        await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
         return ObserveRoomResponse(
             room_code=room_code,
             state=game_state_to_response(games[room_code])
         )
+        
+
+
