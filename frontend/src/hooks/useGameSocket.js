@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import useGameStore from '../store/useGameStore'
 
-const WS_URL = import.meta.env.VITE_API_URL.replace('http', 'ws')
+const WS_URL = import.meta.env.VITE_WS_URL
 
 const useGameSocket = (roomCode, playerName) => {
   const setGameState = useGameStore((state) => state.setGameState)
