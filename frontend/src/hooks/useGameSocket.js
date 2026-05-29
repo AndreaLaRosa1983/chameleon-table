@@ -10,7 +10,7 @@ const useGameSocket = (roomCode, playerName) => {
   useEffect(() => {
     if (!roomCode || !playerName) return
 
-    const ws = new WebSocket(`${WS_URL}/ws/${roomCode}/${playerName}`)
+    const ws = new WebSocket(`${WS_URL}/ws/${roomCode}/${encodeURIComponent(playerName)}`)
     wsRef.current = ws
 
     ws.onmessage = (event) => {
