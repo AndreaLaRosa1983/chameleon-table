@@ -20,6 +20,8 @@ import random
 import string
 from asyncio import create_task
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,7 +40,16 @@ async def lifespan(app: FastAPI):
                 disconnection_tasks[f"{state.room_code}_{player.name}"] = task
     yield
     # shutdown (vuoto per ora)
-app = FastAPI(lifespan=lifespan)  # ← fuori, a livello modulo
+app = FastAPI(lifespan=lifespan)  
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(ws_router)  
 
 def generate_room_code() -> str:

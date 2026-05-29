@@ -29,7 +29,7 @@ const useGameSocket = (roomCode, playerName) => {
     return () => {
       ws.close()
     }
-  }, [roomCode, playerName])
+  }, [roomCode, playerName, setGameState])
 
   return wsRef
 }
