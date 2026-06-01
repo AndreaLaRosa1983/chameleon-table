@@ -89,6 +89,7 @@ async def join_room(room_code: str, request: JoinRoomRequest):
             raise HTTPException(status_code=400, detail="Same Player Error")
         games[room_code].players.append(Player(name=request.player_name))
         games[room_code].turn_order.append(request.player_name)
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return JoinRoomResponse(
             room_code=room_code,
             state=game_state_to_response(games[room_code])
@@ -140,7 +141,7 @@ async def draw(room_code: str, request: DrawCardRequest):
         games[room_code] = state
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return DrawCardResponse(
             card=CardResponse(card_type=card.card_type, color=card.color),
             state=game_state_to_response(games[room_code])
@@ -166,13 +167,13 @@ async def place(room_code: str, request: PlaceCardRequest):
         games[room_code] = state
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         if all(p.passed for p in games[room_code].players if p.active):
             state = end_round(games[room_code])
             games[room_code] = state
             advance_sequence(room_code)
             await save_game(room_code, games[room_code])
-            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return PlaceCardResponse(
             state=game_state_to_response(games[room_code])
         )
@@ -195,7 +196,7 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest):
         games[room_code] = state
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return TakeRowResponse(
             state=game_state_to_response(games[room_code])
         )
@@ -217,7 +218,7 @@ async def leave(room_code: str, request: LeaveRoomRequest):
         games[room_code] = games[room_code]
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return LeaveRoomResponse(
             state=game_state_to_response(games[room_code])
         )
@@ -264,7 +265,7 @@ async def observe(room_code: str, request: ObserveRoomRequest):
         games[room_code] = state
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return ObserveRoomResponse(
             room_code=room_code,
             state=game_state_to_response(games[room_code])

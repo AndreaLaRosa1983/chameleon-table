@@ -49,5 +49,5 @@ async def handle_disconnection(room_code: str, player_name: str):
             if active_players <= initial_players - 2:
                 games[room_code].phase = GamePhase.ABORTED
             advance_sequence(room_code)
-            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
     disconnection_tasks.pop(f"{room_code}_{player_name}", None)

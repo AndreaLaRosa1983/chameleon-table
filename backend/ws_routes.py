@@ -20,7 +20,7 @@ async def handle_disconnection(room_code: str, player_name: str):
             if active_players <= initial_players - 2:
                 games[room_code].phase = GamePhase.ABORTED
             advance_sequence(room_code)
-            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
     disconnection_tasks.pop(f"{room_code}_{player_name}", None)
 
 @router.websocket("/ws/{room_code}/{player_name}")
@@ -39,11 +39,11 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_name: 
             if player:
                 player.active = True
                 advance_sequence(room_code)
-                await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+                await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
 
     await manager.connect(room_code, websocket)
     try:
-        await websocket.send_json(game_state_to_response(games[room_code]).model_dump())
+        await websocket.send_json(game_state_to_response(games[room_code]).model_dump(mode='json'))
         while True:
             await websocket.receive_text()
     except Exception:
@@ -52,7 +52,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_name: 
             if player and not player.left:
                 player.active = False
                 advance_sequence(room_code)
-                await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump())
+                await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
             if not player.left:
                 task = asyncio.create_task(handle_disconnection(room_code, player_name))
                 disconnection_tasks[task_key] = task
