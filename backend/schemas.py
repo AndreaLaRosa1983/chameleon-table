@@ -29,6 +29,8 @@ class GameStateResponse(BaseModel):
     observers: list[str] = []
     min_players: int = 2
     sequence_number: int = 0
+    deck_count: int = 0
+    pending_card: Optional[CardResponse] = None
 
 class CreateRoomRequest(BaseModel):
     player_name: str

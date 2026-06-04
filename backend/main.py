@@ -107,7 +107,9 @@ async def start_room(room_code: str, request: StartRoomRequest):
         if len(games[room_code].players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
         games[room_code].phase = GamePhase.PLAYING
+        advance_sequence(room_code)
         await save_game(room_code, games[room_code])
+        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return StartRoomResponse(
             room_code=room_code,
             state=game_state_to_response(games[room_code])

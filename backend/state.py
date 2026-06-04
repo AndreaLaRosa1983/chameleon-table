@@ -1,9 +1,8 @@
-from backend.schemas import GameStateResponse
-from backend.models import GameState
-from asyncio import Lock, Task
-from asyncio import sleep, create_task, Task
+from backend.schemas import GameStateResponse, RowResponse, PlayerResponse, CardResponse
+from backend.models import GameState, GamePhase
+from asyncio import Lock, Task, sleep, create_task
+import asyncio
 from backend.ws_manager import manager
-from backend.models import GamePhase
 
 games: dict[str, GameState] = {}
 
@@ -16,12 +15,26 @@ def get_lock(room_code: str) -> Lock:
         room_locks[room_code] = Lock()
     return room_locks[room_code]
 
-
 def game_state_to_response(state) -> GameStateResponse:
     return GameStateResponse(
         room_code=state.room_code,
-        rows=[],
-        players=[],
+        rows=[
+            RowResponse(
+                cards=[CardResponse(card_type=c.card_type, color=c.color) for c in row.cards],
+                taken_by=row.taken_by
+            )
+            for row in state.rows
+        ],
+        players=[
+            PlayerResponse(
+                name=p.name,
+                cards=[CardResponse(card_type=c.card_type, color=c.color) for c in p.cards],
+                jokers=[CardResponse(card_type=c.card_type, color=c.color) for c in p.jokers],
+                passed=p.passed,
+                active=p.active
+            )
+            for p in state.players
+        ],
         turn_order=state.turn_order,
         current_turn=state.current_turn,
         last_round=state.last_round,
@@ -30,7 +43,12 @@ def game_state_to_response(state) -> GameStateResponse:
         last_row_taker=state.last_row_taker,
         observers=state.observers,
         min_players=state.min_players,
-        sequence_number=state.sequence_number
+        sequence_number=state.sequence_number,
+        deck_count=len(state.deck),
+        pending_card=CardResponse(
+            card_type=state.pending_card.card_type,
+            color=state.pending_card.color
+        ) if state.pending_card else None
     )
 
 def advance_sequence(room_code: str):
