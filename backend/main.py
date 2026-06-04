@@ -12,7 +12,7 @@ from backend.schemas import (
     CardResponse, LeaveRoomRequest,
     LeaveRoomResponse, RoomsListResponse,
     RoomSummary, ObserveRoomRequest, ObserveRoomResponse)
-from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round
+from backend.game import create_game, create_rows, draw_card, place_card, take_row, add_observer, end_round
 from backend.models import GamePhase, Player
 from backend.ws_routes import router as ws_router
 from backend.database import room_code_exists, init_db, load_active_games, save_game
@@ -107,6 +107,7 @@ async def start_room(room_code: str, request: StartRoomRequest):
         if len(games[room_code].players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
         games[room_code].phase = GamePhase.PLAYING
+        games[room_code].rows = create_rows(len(games[room_code].players))
         advance_sequence(room_code)
         await save_game(room_code, games[room_code])
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))

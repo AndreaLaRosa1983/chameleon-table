@@ -1,14 +1,15 @@
 import { useState } from 'react'
+import useGameStore from '../store/useGameStore'
+import useGameSocket from '../hooks/useGameSocket'
 
-// !!! mock attenzione
-
+// ── MOCK DATA ──────────────────────────────────────────────────────────────────
 const MOCK_STATE = {
   room_code: 'BEJDDL',
   phase: 'playing',
-  current_turn: 'Alice',
+  current_turn: 'Bob',
   deck_count: 54,
   last_round: false,
-  pending_card: null,
+  pending_card: { card_type: 'color', color: 'green' },
   turn_order: ['Alice', 'Bob', 'Charles', 'David', 'Eve'],
   rows: [
     { cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'blue' }], taken_by: null },
@@ -26,6 +27,7 @@ const MOCK_STATE = {
 
 const MY_NAME = 'Bob'
 
+// ── HELPERS ────────────────────────────────────────────────────────────────────
 const COLOR_ASSETS = {
   green: '/assets/green.png',
   blue: '/assets/blue.png',
@@ -59,28 +61,26 @@ function countPlus2(cards) {
   return cards.filter(c => c.card_type === 'plus2').length
 }
 
-function Card({ color, size = 'sm', style = {} }) {
-  const s = size === 'lg' ? CARD_LG : size === 'md' ? CARD_MD : CARD_SM
-  return (
-    <img
-      src={COLOR_ASSETS[color] || COLOR_ASSETS.cotton}
-      alt={color}
-      style={{ width: s.w, height: s.h, borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.2)', objectFit: 'contain', flexShrink: 0, ...style }}
-    />
-  )
+function cardAsset(card) {
+  if (!card) return null
+  if (card.card_type === 'plus2') return '/assets/cotton.png'
+  return COLOR_ASSETS[card.color] || null
 }
 
+// ── COMPONENTS ─────────────────────────────────────────────────────────────────
+
 function ColorChip({ color, count, size = 'sm' }) {
+  const s = size === 'md' ? CARD_MD : CARD_SM
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <Card color={color} size={size} />
+      <img src={COLOR_ASSETS[color]} alt={color} style={{ width: s.w, height: s.h, borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.2)', objectFit: 'contain', flexShrink: 0 }} />
       <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{count}</span>
     </div>
   )
 }
 
 function Plus2Chip({ count, isMe, size = 'sm' }) {
-  const s = size === 'lg' ? CARD_LG : size === 'md' ? CARD_MD : CARD_SM
+  const s = size === 'md' ? CARD_MD : CARD_SM
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
       <img src="/assets/cotton.png" alt="+2" style={{ width: s.w, height: s.h, borderRadius: 6, border: '0.5px solid rgba(0,0,0,0.2)', objectFit: 'contain' }} />
@@ -159,11 +159,11 @@ function StackedRowCards({ cards }) {
   )
 }
 
-function RowPanel({ row, index, canTake, onTake }) {
-  const clickable = canTake && row.cards.length > 0 && !row.taken_by
+function RowPanel({ row, index, canPlace, onPlace }) {
+  const clickable = canPlace && !row.taken_by && row.cards.length < 3
   return (
     <div
-      onClick={clickable ? onTake : undefined}
+      onClick={clickable ? () => onPlace(index) : undefined}
       style={{
         flex: 1,
         background: row.taken_by ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.25)',
@@ -187,20 +187,25 @@ function RowPanel({ row, index, canTake, onTake }) {
   )
 }
 
-function DeckPanel({ count, lastRound }) {
+function DeckPanel({ count, lastRound, canDraw, onDraw }) {
   return (
-    <div style={{
-      background: 'rgba(0,0,0,0.25)',
-      border: lastRound ? '2px solid #E24B4A' : '1px solid rgba(255,255,255,0.1)',
-      borderRadius: 14,
-      padding: '14px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 8,
-      flexShrink: 0,
-      width: 100,
-    }}>
+    <div
+      onClick={canDraw ? onDraw : undefined}
+      style={{
+        background: 'rgba(0,0,0,0.25)',
+        border: lastRound ? '2px solid #E24B4A' : canDraw ? '2px solid #EF9F27' : '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 14,
+        padding: '14px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0,
+        width: 100,
+        cursor: canDraw ? 'pointer' : 'default',
+        transition: 'border-color 0.15s',
+      }}
+    >
       <img src="/assets/back.png" alt="deck" style={{ width: CARD_MD.w, height: CARD_MD.h, borderRadius: 8, border: '0.5px solid rgba(0,0,0,0.2)', objectFit: 'contain' }} />
       <span style={{ fontSize: 18, fontWeight: 700, color: lastRound ? '#E24B4A' : 'white' }}>{count}</span>
       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{lastRound ? 'last round' : 'cards'}</span>
@@ -208,17 +213,128 @@ function DeckPanel({ count, lastRound }) {
   )
 }
 
+function PendingCardPanel({ card }) {
+  if (!card) return null
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em' }}>drawn card</span>
+      <img
+        src={cardAsset(card)}
+        alt={card.color || '+2'}
+        style={{
+          width: CARD_MD.w, height: CARD_MD.h,
+          borderRadius: 8,
+          border: '2px solid #EF9F27',
+          objectFit: 'contain',
+          boxShadow: '0 0 16px rgba(239,159,39,0.3)',
+        }}
+      />
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>click a row to place</span>
+    </div>
+  )
+}
+
+function ConfirmModal({ rowIndex, onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.6)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100,
+    }}>
+      <div style={{
+        background: '#1e3020',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 16,
+        padding: '28px 36px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 20,
+        minWidth: 260,
+      }}>
+        <span style={{ fontSize: 16, color: 'white', fontWeight: 600 }}>
+          Place card on row {rowIndex + 1}?
+        </span>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button
+            onClick={onConfirm}
+            style={{
+              padding: '10px 28px',
+              background: 'rgba(80,140,80,0.35)',
+              border: '1px solid rgba(120,200,120,0.4)',
+              borderRadius: 10,
+              color: '#a8e0a8',
+              fontSize: 14,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Confirm
+          </button>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '10px 28px',
+              background: 'rgba(140,60,60,0.3)',
+              border: '1px solid rgba(200,100,100,0.3)',
+              borderRadius: 10,
+              color: '#e0a8a8',
+              fontSize: 14,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── MAIN ───────────────────────────────────────────────────────────────────────
 export default function Game() {
-  const [gameState] = useState(MOCK_STATE)
-  const myName = MY_NAME
+  const { roomCode, playerName, gameState: liveState } = useGameStore()
+  const [confirmRow, setConfirmRow] = useState(null)
+
+  // fall back to mock when navigating directly to /game/MOCK
+  const gameState = liveState ?? MOCK_STATE
+  const myName = playerName ?? MY_NAME
+
+  useGameSocket(roomCode, playerName)
 
   const me = gameState.players.find(p => p.name === myName)
   const opponents = gameState.players.filter(p => p.name !== myName)
   const isTurn = gameState.current_turn === myName
+  const hasPending = !!gameState.pending_card
 
   const topOpponents = opponents.length >= 3 ? opponents.slice(2) : []
   const leftOpponent = opponents[0] || null
   const rightOpponent = opponents[1] || null
+
+  function handleDraw() {
+    console.log("draw card - TODO: call POST /draw")
+  }
+
+  function handlePlaceRequest(rowIndex) {
+    setConfirmRow(rowIndex)
+  }
+
+  function handlePlaceConfirm() {
+    console.log("place card on row", confirmRow, "- TODO: call POST /place")
+    setConfirmRow(null)
+  }
+
+  function handlePlaceCancel() {
+    setConfirmRow(null)
+  }
 
   return (
     <div style={{
@@ -234,6 +350,15 @@ export default function Game() {
       fontFamily: "'Georgia', serif",
     }}>
 
+      {/* confirm modal */}
+      {confirmRow !== null && (
+        <ConfirmModal
+          rowIndex={confirmRow}
+          onConfirm={handlePlaceConfirm}
+          onCancel={handlePlaceCancel}
+        />
+      )}
+
       {/* header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>
@@ -244,7 +369,7 @@ export default function Game() {
         </span>
       </div>
 
-      {/* top opponents (4-5 players) */}
+      {/* top opponents */}
       {topOpponents.length > 0 && (
         <div style={{ display: 'flex', gap: 14, flexShrink: 0 }}>
           {topOpponents.map(p => (
@@ -253,7 +378,7 @@ export default function Game() {
         </div>
       )}
 
-      {/* middle: left | rows | right */}
+      {/* middle */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
 
         {leftOpponent && (
@@ -264,7 +389,13 @@ export default function Game() {
 
         <div style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
           {gameState.rows.map((row, i) => (
-            <RowPanel key={i} row={row} index={i} canTake={isTurn && !gameState.pending_card} onTake={() => console.log('take row', i)} />
+            <RowPanel
+              key={i}
+              row={row}
+              index={i}
+              canPlace={isTurn && hasPending}
+              onPlace={handlePlaceRequest}
+            />
           ))}
         </div>
 
@@ -276,15 +407,20 @@ export default function Game() {
 
       </div>
 
-      {/* bottom: me + actions + deck */}
+      {/* bottom */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexShrink: 0 }}>
+
         <div style={{ flex: 1 }}>
           <PlayerPanel player={me} isMe={true} isTurn={isTurn} cardSize="md" />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, justifyContent: 'flex-end' }}>
-          {isTurn && !gameState.pending_card && (
-            <button onClick={() => console.log('draw')} style={{
+        {/* pending card */}
+        {hasPending && <PendingCardPanel card={gameState.pending_card} />}
+
+        {/* draw button (only when it's your turn and no pending) */}
+        {isTurn && !hasPending && (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', flexShrink: 0 }}>
+            <button onClick={handleDraw} style={{
               padding: '12px 24px',
               background: 'rgba(80,140,80,0.3)',
               border: '1px solid rgba(120,200,120,0.4)',
@@ -297,15 +433,15 @@ export default function Game() {
             }}>
               Draw card
             </button>
-          )}
-          {isTurn && gameState.pending_card && (
-            <div style={{ padding: '12px 18px', background: 'rgba(60,100,140,0.3)', border: '1px solid rgba(100,160,200,0.3)', borderRadius: 10, color: '#a8c4d4', fontSize: 13, textAlign: 'center' }}>
-              Choose a row
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <DeckPanel count={gameState.deck_count} lastRound={gameState.last_round} />
+        <DeckPanel
+          count={gameState.deck_count}
+          lastRound={gameState.last_round}
+          canDraw={isTurn && !hasPending}
+          onDraw={handleDraw}
+        />
       </div>
 
     </div>
