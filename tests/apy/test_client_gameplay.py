@@ -3,11 +3,6 @@ from fastapi.testclient import TestClient
 from backend.main import app
 
 client = TestClient(app)
-import pytest
-from fastapi.testclient import TestClient
-from backend.main import app
-
-client = TestClient(app)
 
 def setup_game(max_players=3, players=["Alice", "Bob", "Charlie"]):
     response = client.post("/rooms", json={"player_name": players[0], "max_players": max_players})
@@ -57,14 +52,15 @@ def test_place_without_draw():
     current_player = state["turn_order"][0]
     response = client.post(f"/rooms/{room_code}/place", json={"player_name": current_player, "row_index": 0})
     assert response.status_code == 400
-    
+
 def test_take_row():
     room_code = setup_game()
     state = client.get(f"/rooms/{room_code}/state").json()["state"]
     current_player = state["turn_order"][0]
+    next_player = state["turn_order"][1]
     client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
     client.post(f"/rooms/{room_code}/place", json={"player_name": current_player, "row_index": 0})
-    response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": current_player, "row_index": 0})
+    response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": next_player, "row_index": 0})
     assert response.status_code == 200
     assert "state" in response.json()
 
@@ -86,7 +82,7 @@ def test_take_row_with_pending_card():
     client.post(f"/rooms/{room_code}/draw", json={"player_name": current_player})
     response = client.post(f"/rooms/{room_code}/take-row", json={"player_name": current_player, "row_index": 0})
     assert response.status_code == 400
-    
+
 def test_leave_room():
     room_code = setup_game()
     response = client.post(f"/rooms/{room_code}/leave", json={"player_name": "Alice"})
@@ -107,7 +103,7 @@ def test_leave_room_aborts_game():
     client.post(f"/rooms/{room_code}/leave", json={"player_name": "Bob"})
     response = client.get(f"/rooms/{room_code}/state")
     assert response.json()["state"]["phase"] == "aborted"
-    
+
 def test_get_rooms_waiting():
     client.post("/rooms", json={"player_name": "Alice", "max_players": 3})
     client.post("/rooms", json={"player_name": "Bob", "max_players": 2})
@@ -123,7 +119,7 @@ def test_get_rooms_active():
     assert "rooms" in response.json()
     codes = [r["room_code"] for r in response.json()["rooms"]]
     assert room_code in codes
-    
+
 def test_observe_room():
     room_code = setup_game()
     response = client.post(f"/rooms/{room_code}/observe", json={"observer_name": "Spectator1"})
@@ -147,7 +143,7 @@ def test_observe_room_full():
     client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S4"})
     response = client.post(f"/rooms/{room_code}/observe", json={"observer_name": "S5"})
     assert response.status_code == 400
-    
+
 def test_sequence_number_increases_on_draw():
     room_code = setup_game()
     state_before = client.get(f"/rooms/{room_code}/state").json()["state"]

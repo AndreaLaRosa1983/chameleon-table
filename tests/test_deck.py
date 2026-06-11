@@ -118,10 +118,11 @@ def test_create_game_basic_structure():
 
 def test_create_game_deck_and_colors():
     state = create_game("ROOM1", ["Alice", "Bob", "Charlie"])
-    assert len(state.deck) > 0
-    assert any(c.card_type == CardType.LAST_ROUND for c in state.deck)
-    colors = [p.cards[0].color for p in state.players]
-    assert len(colors) == len(set(colors))
+    # deck is now empty at creation, filled at start
+    assert len(state.deck) == 0
+    # players have no initial cards yet
+    for player in state.players:
+        assert len(player.cards) == 0
 
 
 def test_create_game_two_players():

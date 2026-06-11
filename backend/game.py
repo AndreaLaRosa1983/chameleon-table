@@ -54,26 +54,20 @@ def assign_initial_colors(players: list[Player]) -> list[CardColor]:
     return colors[:n]
 
 def create_game(room_code: str, player_names: list[str]) -> GameState:
-    
     players = create_players(player_names)
-    
     n_players = len(players)
-    
-    assigned_color = assign_initial_colors(players)
-    deck = create_deck(n_players,assigned_color)
     rows = create_rows(n_players)
-    
     start = random.randint(0, n_players - 1)
     turn_order = player_names[start:] + player_names[:start]
     
     return GameState(
-    room_code=room_code,
-    deck=deck,
-    rows=rows,
-    players=players,
-    turn_order=turn_order,
-    round_starter=turn_order[0],
-    phase=GamePhase.WAITING
+        room_code=room_code,
+        deck=[],        # filled at start
+        rows=rows,
+        players=players,
+        turn_order=turn_order,
+        round_starter=turn_order[0],
+        phase=GamePhase.WAITING
     )
     
 def current_turn(state: GameState) -> Optional[str]:
@@ -125,6 +119,9 @@ def draw_card(state: GameState, player_name: str) -> tuple[GameState, Card]:
     if player_name != current_turn(state):
         raise ValueError("Not your turn")
     
+    if not any(is_row_available_for_placement(r) for r in state.rows):
+        raise ValueError("No rows available, take a row first")
+    
     card = state.deck.pop(0)
     if card.card_type == CardType.LAST_ROUND:
         state.last_round = True
@@ -132,14 +129,25 @@ def draw_card(state: GameState, player_name: str) -> tuple[GameState, Card]:
     
     return state, card
 
+def next_turn(state: GameState, current_player: str) -> GameState:
+    n = len(state.turn_order)
+    current_index = state.turn_order.index(current_player)
+    for i in range(1, n + 1):
+        next_index = (current_index + i) % n
+        next_name = state.turn_order[next_index]
+        next_player = next((p for p in state.players if p.name == next_name), None)
+        if next_player and not next_player.passed and next_player.active:
+            state.turn_order = state.turn_order[next_index:] + state.turn_order[:next_index]
+            break
+    return state
+
 def place_card(state: GameState, player_name: str, row_index: int, card: Card) -> GameState:
     if player_name != current_turn(state):
         raise ValueError("Not your turn")
     if not is_row_available_for_placement(state.rows[row_index]):
         raise ValueError("Row taken or full")
-    
     state.rows[row_index].cards.append(card)
-    return state
+    return next_turn(state, player_name)
 
 def calculate_score(state: GameState) -> dict[str, int]:
     SCORE_TABLE = {1: 1, 2: 3, 3: 6, 4: 10, 5: 15, 6: 21}

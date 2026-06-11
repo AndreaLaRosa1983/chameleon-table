@@ -42,6 +42,14 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, player_name: 
                 await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
 
     await manager.connect(room_code, websocket)
+    
+    async with get_lock(room_code):
+        player = next((p for p in games[room_code].players if p.name == player_name), None)
+        if player and not player.active:
+            player.active = True
+            advance_sequence(room_code)
+            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+
     try:
         await websocket.send_json(game_state_to_response(games[room_code]).model_dump(mode='json'))
         while True:

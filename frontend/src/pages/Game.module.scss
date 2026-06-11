@@ -1,0 +1,396 @@
+
+$color-turn: #EF9F27;
+$color-turn-dark: #BA7517;
+$color-danger: #E24B4A;
+$color-success: #90e090;
+$color-bg-panel: rgba(0, 0, 0, 0.25);
+$color-bg-taken: rgba(10, 10, 10, 0.7);
+$color-border: rgba(255, 255, 255, 0.1);
+$color-border-turn: 2px solid $color-turn;
+$color-border-default: 1px solid $color-border;
+$radius: 14px;
+$font: 'Georgia', serif;
+
+$card-sm-w: 52px;
+$card-sm-h: 72px;
+$card-md-w: 80px;
+$card-md-h: 112px;
+$card-lg-w: 110px;
+$card-lg-h: 154px;
+
+
+.gameTable {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 20px;
+  height: 100vh;
+  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a2a1a;
+  font-family: $font;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+
+  .roomCode {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.1em;
+  }
+
+  .turnInfo {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.35);
+
+    &.lastRound {
+      color: $color-danger;
+    }
+  }
+}
+
+.topOpponents {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.middleSection {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+}
+
+.opponentSide {
+  flex: 0 0 180px;
+}
+
+.rowsArea {
+  flex: 1;
+  display: flex;
+  gap: 14px;
+  min-height: 0;
+}
+
+.bottomSection {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.myPanelWrapper {
+  flex: 1;
+}
+
+.playerPanel {
+  background: $color-bg-panel;
+  border: $color-border-default;
+  border-radius: $radius;
+  padding: 12px 16px;
+
+  &.isTurn {
+    border: $color-border-turn;
+  }
+
+  &.fullHeight {
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  &.flex1 {
+    flex: 1;
+  }
+}
+
+.playerName {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &.isTurn {
+    color: $color-turn;
+  }
+}
+
+.turnDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $color-turn;
+  display: inline-block;
+}
+
+.passedBadge {
+  font-size: 11px;
+  background: rgba(80, 160, 80, 0.3);
+  color: $color-success;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.playerCards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.colorChip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardImg {
+  border-radius: 6px;
+  border: 0.5px solid rgba(0, 0, 0, 0.2);
+  object-fit: contain;
+  flex-shrink: 0;
+
+  &.sm { width: $card-sm-w; height: $card-sm-h; }
+  &.md { width: $card-md-w; height: $card-md-h; }
+  &.lg {
+    width: $card-lg-w;
+    height: $card-lg-h;
+    border-radius: 8px;
+  }
+}
+
+.chipCount {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.rowPanel {
+  flex: 1;
+  background: $color-bg-panel;
+  border: $color-border-default;
+  border-radius: $radius;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  cursor: default;
+  transition: border-color 0.15s, background 0.15s;
+
+  &.taken {
+    background: $color-bg-taken;
+  }
+
+  &.clickable {
+    border: $color-border-turn;
+    cursor: pointer;
+  }
+}
+
+.rowLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  align-self: flex-start;
+  margin-bottom: 10px;
+
+  .takenBy {
+    margin-left: 6px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.stackedCards {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(#{$card-lg-w} + 8px);
+}
+
+.stackedCard {
+  width: $card-lg-w;
+  height: $card-lg-h;
+  border-radius: 8px;
+  border: 0.5px solid rgba(0, 0, 0, 0.2);
+  object-fit: contain;
+
+  &:not(:first-child) {
+    margin-top: calc(#{$card-lg-h} * -0.55);
+    box-shadow: 0 -3px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.emptyRow {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.25);
+  font-style: italic;
+  margin: auto;
+}
+
+.deckPanel {
+  background: $color-bg-panel;
+  border: $color-border-default;
+  border-radius: $radius;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100px;
+  cursor: default;
+  transition: border-color 0.15s;
+
+  &.canDraw {
+    border: $color-border-turn;
+    cursor: pointer;
+  }
+
+  &.lastRound {
+    border: 2px solid $color-danger;
+  }
+}
+
+.deckCount {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+
+  &.lastRound { color: $color-danger; }
+}
+
+.deckLabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.pendingCardPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pendingLabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.06em;
+}
+
+.pendingCardImg {
+  width: $card-md-w;
+  height: $card-md-h;
+  border-radius: 8px;
+  border: 2px solid $color-turn;
+  object-fit: contain;
+  box-shadow: 0 0 16px rgba(239, 159, 39, 0.3);
+}
+
+.pendingHint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+
+  &.danger { color: $color-danger; }
+}
+
+.drawButtonWrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.drawButton {
+  padding: 12px 24px;
+  background: rgba(80, 140, 80, 0.3);
+  border: 1px solid rgba(120, 200, 120, 0.4);
+  border-radius: 10px;
+  color: #a8e0a8;
+  font-size: 14px;
+  font-family: $font;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: opacity 0.15s;
+
+  &.disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+}
+
+.takeRowWarning {
+  padding: 12px 18px;
+  background: rgba(140, 60, 60, 0.2);
+  border: 1px solid rgba(200, 100, 100, 0.3);
+  border-radius: 10px;
+  color: $color-danger;
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modalBox {
+  background: #1e3020;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 28px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  min-width: 260px;
+}
+
+.modalTitle {
+  font-size: 16px;
+  color: white;
+  font-weight: 600;
+}
+
+.modalButtons {
+  display: flex;
+  gap: 12px;
+}
+
+.btnConfirm {
+  padding: 10px 28px;
+  background: rgba(80, 140, 80, 0.35);
+  border: 1px solid rgba(120, 200, 120, 0.4);
+  border-radius: 10px;
+  color: #a8e0a8;
+  font-size: 14px;
+  font-family: $font;
+  cursor: pointer;
+}
+
+.btnCancel {
+  padding: 10px 28px;
+  background: rgba(140, 60, 60, 0.3);
+  border: 1px solid rgba(200, 100, 100, 0.3);
+  border-radius: 10px;
+  color: #e0a8a8;
+  font-size: 14px;
+  font-family: $font;
+  cursor: pointer;
+}

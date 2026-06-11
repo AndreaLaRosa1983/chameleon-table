@@ -1,5 +1,6 @@
 from backend.schemas import GameStateResponse, RowResponse, PlayerResponse, CardResponse
 from backend.models import GameState, GamePhase
+from backend.game import current_turn as compute_current_turn
 from asyncio import Lock, Task, sleep, create_task
 import asyncio
 from backend.ws_manager import manager
@@ -21,7 +22,8 @@ def game_state_to_response(state) -> GameStateResponse:
         rows=[
             RowResponse(
                 cards=[CardResponse(card_type=c.card_type, color=c.color) for c in row.cards],
-                taken_by=row.taken_by
+                taken_by=row.taken_by,
+                max_cards=row.max_cards
             )
             for row in state.rows
         ],
@@ -53,6 +55,7 @@ def game_state_to_response(state) -> GameStateResponse:
 
 def advance_sequence(room_code: str):
     games[room_code].sequence_number += 1
+    games[room_code].current_turn = compute_current_turn(games[room_code])
     
 async def handle_disconnection(room_code: str, player_name: str):
     await asyncio.sleep(120)  # 2 minuti

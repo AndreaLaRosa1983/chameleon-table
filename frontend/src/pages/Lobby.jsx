@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
 import { createRoom, joinRoom, getRooms } from '../api/api'
+import s from './Lobby.module.scss'
 
 function Lobby() {
   const navigate = useNavigate()
@@ -48,37 +49,55 @@ function Lobby() {
   }
 
   return (
-    <div>
-      <h1>Chameleon Table</h1>
+    <div className={s.page}>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      <div>
-        <h2>Create a room</h2>
-        <input
-          placeholder="Your name"
-          value={playerName || ''}
-          onChange={(e) => setPlayerName(e.target.value)}
-        />
-        <select value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
-          <option value={2}>2 players</option>
-          <option value={3}>3 players</option>
-          <option value={4}>4 players</option>
-          <option value={5}>5 players</option>
-        </select>
-        <button onClick={handleCreate}>Create room</button>
+      <div className={s.logo}>
+        <div className={s.logoTitle}>🦎 Chameleon Table</div>
+        <div className={s.logoSub}>online card game</div>
       </div>
 
-      <div>
-        <h2>Available rooms</h2>
-        {rooms.length === 0 && <p>No rooms available</p>}
+      {error && <div className={s.error}>{error}</div>}
+
+      <div className={s.card}>
+        <div className={s.cardTitle}>Create a room</div>
+        <div className={s.formRow}>
+          <input
+            className={s.input}
+            placeholder="Your name"
+            value={playerName || ''}
+            onChange={(e) => { setPlayerName(e.target.value); setError(null) }}
+          />
+          <select
+            className={s.select}
+            value={maxPlayers}
+            onChange={(e) => setMaxPlayers(Number(e.target.value))}
+          >
+            <option value={2}>2 players</option>
+            <option value={3}>3 players</option>
+            <option value={4}>4 players</option>
+            <option value={5}>5 players</option>
+          </select>
+          <button className={s.btnPrimary} onClick={handleCreate}>Create</button>
+        </div>
+      </div>
+
+      <div className={s.sectionTitle}>Available rooms</div>
+
+      <div className={s.roomList}>
+        {rooms.length === 0 && <div className={s.empty}>No rooms available</div>}
         {rooms.map((room) => (
-          <div key={room.room_code}>
-            <span>{room.room_code} — {room.players}/{room.max_players} players</span>
-            <button onClick={() => handleJoin(room.room_code)}>Join</button>
+          <div key={room.room_code} className={s.roomItem}>
+            <div>
+              <div className={s.roomCode}>{room.room_code}</div>
+              <div className={s.roomMeta}>{room.players} / {room.max_players} players · waiting</div>
+            </div>
+            <button className={s.btnJoin} onClick={() => handleJoin(room.room_code)}>
+              Join →
+            </button>
           </div>
         ))}
       </div>
+
     </div>
   )
 }

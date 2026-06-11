@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
 import useGameSocket from '../hooks/useGameSocket'
 import { startRoom } from '../api/api'
+import s from './WaitingRoom.module.scss'
 
 function WaitingRoom() {
   const { roomCode } = useParams()
@@ -11,7 +12,6 @@ function WaitingRoom() {
 
   useGameSocket(roomCode, playerName)
 
-  // when the game starts, navigate to the game page
   useEffect(() => {
     if (gameState?.phase === 'playing') {
       navigate(`/game/${roomCode}`)
@@ -31,24 +31,56 @@ function WaitingRoom() {
   const isHost = players[0] === playerName
 
   return (
-    <div>
-      <h1>Waiting Room</h1>
-      <p>Room code: <strong>{roomCode}</strong></p>
+    <div className={s.page}>
 
-      <h2>Players ({players.length})</h2>
-      <ul>
-        {players.map((name) => (
-          <li key={name}>{name}</li>
-        ))}
-      </ul>
+      <div className={s.logoTitle}>🦎 Chameleon Table</div>
 
-      {isHost && (
-        <button onClick={handleStart} disabled={!canStart}>
-          Start game
-        </button>
-      )}
-      {isHost && !canStart && <p>At least 2 players needed to start</p>}
-      {!isHost && <p>Waiting for the host to start the game...</p>}
+      <div className={s.roomHeader}>
+        <div className={s.roomTitle}>Waiting Room</div>
+        <div className={s.roomCodeRow}>
+          <span className={s.roomCodeLabel}>room code</span>
+          <span className={s.roomCode}>{roomCode}</span>
+        </div>
+      </div>
+
+      <div className={s.card}>
+        <div className={s.cardTitle}>Players ({players.length})</div>
+        <div className={s.playerList}>
+          {players.map((name, i) => (
+            <div key={name} className={s.playerItem}>
+              <div className={`${s.playerDot} ${i === 0 ? s.playerDotHost : ''}`} />
+              <span className={s.playerName}>{name}</span>
+              {i === 0 && <span className={s.hostBadge}>host</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={s.actions}>
+        {isHost && (
+          <>
+            <button
+              className={s.btnStart}
+              onClick={handleStart}
+              disabled={!canStart}
+            >
+              Start game
+            </button>
+            {!canStart && (
+              <span className={s.hint}>At least 2 players needed to start</span>
+            )}
+          </>
+        )}
+        {!isHost && (
+          <div className={s.waiting}>
+            <div className={s.dot} />
+            <div className={s.dot} />
+            <div className={s.dot} />
+            Waiting for the host to start…
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

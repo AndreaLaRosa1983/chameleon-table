@@ -11,11 +11,22 @@ class ConnectionManager:
         self.active_connections[room_code].append(websocket)
     
     async def disconnect(self, room_code: str, websocket: WebSocket):
-        self.active_connections[room_code].remove(websocket)
-    
-    async def broadcast(self, room_code: str, message: dict):
         if room_code in self.active_connections:
-            for connection in self.active_connections[room_code]:
+            try:
+                self.active_connections[room_code].remove(websocket)
+            except ValueError:
+                pass
+            
+    async def broadcast(self, room_code: str, message: dict):
+        if room_code not in self.active_connections:
+            return
+        dead = []
+        for connection in self.active_connections[room_code]:
+            try:
                 await connection.send_json(message)
+            except Exception:
+                dead.append(connection)
+        for connection in dead:
+            self.active_connections[room_code].remove(connection)
 
 manager = ConnectionManager()

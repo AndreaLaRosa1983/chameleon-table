@@ -8,7 +8,7 @@ class CardResponse(BaseModel):
 class RowResponse(BaseModel):
     cards: list[CardResponse] = []
     taken_by: Optional[str] = None
-
+    max_cards: int = 3
 class PlayerResponse(BaseModel):
     name: str
     cards: list[CardResponse] = []
