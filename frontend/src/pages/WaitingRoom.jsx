@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
+import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
 import { startRoom } from '../api/api'
 import s from './WaitingRoom.module.scss'
@@ -8,9 +9,10 @@ import s from './WaitingRoom.module.scss'
 function WaitingRoom() {
   const { roomCode } = useParams()
   const navigate = useNavigate()
-  const { playerName, gameState } = useGameStore()
+  const { gameState } = useGameStore()
+  const { username } = useAuthStore()
 
-  useGameSocket(roomCode, playerName)
+  useGameSocket(roomCode)
 
   useEffect(() => {
     if (gameState?.phase === 'playing') {
@@ -20,7 +22,7 @@ function WaitingRoom() {
 
   const handleStart = async () => {
     try {
-      await startRoom(roomCode, playerName)
+      await startRoom(roomCode)
     } catch (e) {
       console.error('Error starting room:', e)
     }
@@ -28,7 +30,7 @@ function WaitingRoom() {
 
   const players = gameState?.turn_order ?? []
   const canStart = players.length >= 2
-  const isHost = players[0] === playerName
+  const isHost = players[0] === username
 
   return (
     <div className={s.page}>

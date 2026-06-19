@@ -44,6 +44,15 @@ class GameRecord(Base):
     phase = Column(String, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+class UserRecord(Base):
+    __tablename__ = "users"
+    
+    username = Column(String, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -86,5 +95,19 @@ async def save_game(room_code: str, state: GameState):
                     phase=state.phase.value
                 ))
 
+async def get_user(username: str) -> UserRecord | None:
+    async with AsyncSessionLocal() as session:
+        return await session.get(UserRecord, username)
+
+async def create_user(username: str, email: str, hashed_password: str) -> UserRecord:
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            user = UserRecord(
+                username=username,
+                email=email,
+                hashed_password=hashed_password
+            )
+            session.add(user)
+            return user
 
 

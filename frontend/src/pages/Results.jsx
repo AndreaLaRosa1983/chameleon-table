@@ -1,35 +1,8 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
+import { COLOR_ASSETS } from '../constants'
+import { MOCK_FINISHED_STATE, MOCK_ABORTED_STATE, MOCK_SCORES } from '../mocks/mockData'
 import s from './Results.module.scss'
-
-const COLOR_ASSETS = {
-  green:  '/assets/green.png',
-  blue:   '/assets/blue.png',
-  red:    '/assets/red.png',
-  yellow: '/assets/yellow.png',
-  brown:  '/assets/brown.png',
-  purple: '/assets/purple.png',
-  orange: '/assets/orange.png',
-}
-
-const MOCK_SCORES = {
-  Alice:   28,
-  Bob:     21,
-  Charles: 14,
-  David:   11,
-  Eve:     4,
-}
-
-const MOCK_GAME_STATE = {
-  phase: 'finished',
-  players: [
-    { name: 'Alice',   cards: [{ card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'plus2' }, { card_type: 'plus2' }], left: false },
-    { name: 'Bob',     cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'orange' }, { card_type: 'color', color: 'orange' }], left: false },
-    { name: 'Charles', cards: [{ card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'blue' }, { card_type: 'color', color: 'blue' }], left: false },
-    { name: 'David',   cards: [{ card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'orange' }], left: false },
-    { name: 'Eve',     cards: [{ card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'red' }], left: false },
-  ],
-}
 
 function groupColorCards(cards) {
   const counts = {}
@@ -88,10 +61,12 @@ export default function Results() {
   const { roomCode } = useParams()
   const { gameState, clearSession } = useGameStore()
 
-  const state = gameState ?? MOCK_GAME_STATE
+  // fall back to mock state when navigating directly to /results/:roomCode
+  const state = gameState ?? MOCK_FINISHED_STATE
   const phase = state.phase
   const players = state.players
 
+  // TODO: replace with real scores from backend once /rooms/{code}/scores exists
   const scores = MOCK_SCORES
 
   const ranked = [...players]

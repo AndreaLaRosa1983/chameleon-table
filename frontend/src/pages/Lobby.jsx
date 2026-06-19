@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
-import { createRoom, joinRoom, getRooms } from '../api/api'
+import useAuthStore from '../store/useAuthStore'
+import { createRoom, joinRoom, getRooms, getActiveRooms, observeRoom } from '../api/api'
 import s from './Lobby.module.scss'
 
 function Lobby() {
   const navigate = useNavigate()
-  const { playerName, setPlayerName, setRoomCode } = useGameStore()
+  const { setRoomCode } = useGameStore()
+  const { username, clearAuth } = useAuthStore()
 
   const [maxPlayers, setMaxPlayers] = useState(3)
   const [rooms, setRooms] = useState([])
+  const [activeRooms, setActiveRooms] = useState([])
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -21,15 +24,26 @@ function Lobby() {
         console.error(e)
       }
     }
+    const fetchActiveRooms = async () => {
+      try {
+        const data = await getActiveRooms()
+        setActiveRooms(data.rooms)
+      } catch (e) {
+        console.error(e)
+      }
+    }
     fetchRooms()
-    const interval = setInterval(fetchRooms, 3000)
+    fetchActiveRooms()
+    const interval = setInterval(() => {
+      fetchRooms()
+      fetchActiveRooms()
+    }, 3000)
     return () => clearInterval(interval)
   }, [])
 
   const handleCreate = async () => {
-    if (!playerName) return setError('Please enter your name')
     try {
-      const data = await createRoom(playerName, maxPlayers)
+      const data = await createRoom(maxPlayers)
       setRoomCode(data.room_code)
       navigate(`/waiting/${data.room_code}`)
     } catch (e) {
@@ -38,14 +52,28 @@ function Lobby() {
   }
 
   const handleJoin = async (roomCode) => {
-    if (!playerName) return setError('Please enter your name before joining')
     try {
-      await joinRoom(roomCode, playerName)
+      await joinRoom(roomCode)
       setRoomCode(roomCode)
       navigate(`/waiting/${roomCode}`)
     } catch (e) {
       setError('Error joining room')
     }
+  }
+
+  const handleObserve = async (roomCode) => {
+    try {
+      await observeRoom(roomCode)
+      setRoomCode(roomCode)
+      navigate(`/observe/${roomCode}`)
+    } catch (e) {
+      setError('Error joining as observer')
+    }
+  }
+
+  const handleLogout = () => {
+    clearAuth()
+    navigate('/login')
   }
 
   return (
@@ -56,17 +84,16 @@ function Lobby() {
         <div className={s.logoSub}>online card game</div>
       </div>
 
+      <div className={s.userBar}>
+        Logged in as <strong>{username}</strong>
+        <button className={s.btnLogout} onClick={handleLogout}>Logout</button>
+      </div>
+
       {error && <div className={s.error}>{error}</div>}
 
       <div className={s.card}>
         <div className={s.cardTitle}>Create a room</div>
         <div className={s.formRow}>
-          <input
-            className={s.input}
-            placeholder="Your name"
-            value={playerName || ''}
-            onChange={(e) => { setPlayerName(e.target.value); setError(null) }}
-          />
           <select
             className={s.select}
             value={maxPlayers}
@@ -93,6 +120,25 @@ function Lobby() {
             </div>
             <button className={s.btnJoin} onClick={() => handleJoin(room.room_code)}>
               Join →
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className={s.sectionTitle}>Live games</div>
+
+      <div className={s.roomList}>
+        {activeRooms.length === 0 && <div className={s.empty}>No live games</div>}
+        {activeRooms.map((room) => (
+          <div key={room.room_code} className={`${s.roomItem} ${s.liveItem}`}>
+            <div>
+              <div className={s.roomCode}>
+                {room.room_code} <span className={s.liveBadge}>LIVE</span>
+              </div>
+              <div className={s.roomMeta}>{room.players} / {room.max_players} players · in progress</div>
+            </div>
+            <button className={s.btnWatch} onClick={() => handleObserve(room.room_code)}>
+              👁 Watch
             </button>
           </div>
         ))}

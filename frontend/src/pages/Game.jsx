@@ -1,49 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
+import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
 import { drawCard, placeCard, takeRow } from '../api/api'
+import { COLOR_ASSETS, CARD_TYPE_ASSETS, CARD_LG_H } from '../constants'
+import { MY_NAME, MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
-
-const MOCK_STATE = {
-  room_code: 'BEJDDL',
-  phase: 'playing',
-  current_turn: 'Bob',
-  deck_count: 54,
-  last_round: false,
-  pending_card: { card_type: 'color', color: 'green' },
-  turn_order: ['Alice', 'Bob', 'Charles', 'David', 'Eve'],
-  rows: [
-    { cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'blue' }], taken_by: null, max_cards: 3 },
-    { cards: [{ card_type: 'color', color: 'red' }], taken_by: null, max_cards: 3 },
-    { cards: [], taken_by: null, max_cards: 3 },
-  ],
-  players: [
-    { name: 'Alice',   cards: [{ card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }], jokers: [], passed: false, active: true },
-    { name: 'Bob',     cards: [{ card_type: 'color', color: 'blue' }, { card_type: 'color', color: 'blue' }, { card_type: 'color', color: 'orange' }, { card_type: 'plus2', color: null }, { card_type: 'plus2', color: null }], jokers: [], passed: false, active: true },
-    { name: 'Charles', cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'red' }, { card_type: 'plus2', color: null }], jokers: [], passed: false, active: true },
-    { name: 'David',   cards: [{ card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'orange' }], jokers: [], passed: true, active: true },
-    { name: 'Eve',     cards: [{ card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'yellow' }], jokers: [], passed: false, active: true },
-  ],
-}
-
-const MY_NAME = 'Bob'
-
-const COLOR_ASSETS = {
-  green:  '/assets/green.png',
-  blue:   '/assets/blue.png',
-  red:    '/assets/red.png',
-  yellow: '/assets/yellow.png',
-  brown:  '/assets/brown.png',
-  purple: '/assets/purple.png',
-  orange: '/assets/orange.png',
-  cotton: '/assets/cotton.png',
-}
-
-const CARD_MD_W = 80
-const CARD_MD_H = 112
-const CARD_LG_W = 110
-const CARD_LG_H = 154
 
 function groupCards(cards) {
   const counts = {}
@@ -60,8 +23,8 @@ function countPlus2(cards) { return cards.filter(c => c.card_type === 'plus2').l
 
 function cardAsset(card) {
   if (!card) return null
-  if (card.card_type === 'plus2') return '/assets/cotton.png'
-  return COLOR_ASSETS[card.color] || null
+  if (card.card_type === 'color') return COLOR_ASSETS[card.color] || null
+  return CARD_TYPE_ASSETS[card.card_type] || null
 }
 
 
@@ -119,7 +82,7 @@ function StackedRowCards({ cards }) {
       {cards.map((card, i) => (
         <img
           key={i}
-          src={card.card_type === 'plus2' ? '/assets/cotton.png' : COLOR_ASSETS[card.color]}
+          src={cardAsset(card)}
           alt={card.color || '+2'}
           className={s.stackedCard}
           style={{ marginTop: i === 0 ? 0 : `${-CARD_LG_H * 0.55}px` }}
@@ -199,15 +162,16 @@ function ConfirmModal({ rowIndex, onConfirm, onCancel }) {
 }
 
 export default function Game() {
-  const { roomCode, playerName, gameState: liveState } = useGameStore()
+  const { roomCode, gameState: liveState } = useGameStore()
+  const { username } = useAuthStore()
   const [confirmRow, setConfirmRow] = useState(null)
   const navigate = useNavigate()
 
   const gameState = liveState ?? MOCK_STATE
-  const myName = playerName ?? MY_NAME
+  const myName = username ?? MY_NAME
 
-  useGameSocket(roomCode, playerName)
-
+ useGameSocket(roomCode)
+ 
   useEffect(() => {
     if (gameState?.phase === 'finished' || gameState?.phase === 'aborted') {
       navigate(`/results/${roomCode}`)
@@ -226,14 +190,14 @@ export default function Game() {
   const rightOpponent = opponents[1] || null
 
   async function handleDraw() {
-    try { await drawCard(roomCode, myName) }
+    try { await drawCard(roomCode) }
     catch (e) { console.error('draw error:', e) }
   }
 
   function handlePlaceRequest(rowIndex) { setConfirmRow(rowIndex) }
 
   async function handlePlaceConfirm() {
-    try { await placeCard(roomCode, myName, confirmRow) }
+    try { await placeCard(roomCode, confirmRow) }
     catch (e) { console.error('place error:', e) }
     setConfirmRow(null)
   }
@@ -241,7 +205,7 @@ export default function Game() {
   function handlePlaceCancel() { setConfirmRow(null) }
 
   async function handleTakeRow(rowIndex) {
-    try { await takeRow(roomCode, myName, rowIndex) }
+    try { await takeRow(roomCode, rowIndex) }
     catch (e) { console.error('take row error:', e) }
   }
 

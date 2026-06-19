@@ -33,7 +33,6 @@ class GameStateResponse(BaseModel):
     pending_card: Optional[CardResponse] = None
 
 class CreateRoomRequest(BaseModel):
-    player_name: str
     max_players: int = Field(ge=2, le=5)
 
 class CreateRoomResponse(BaseModel):
@@ -41,14 +40,14 @@ class CreateRoomResponse(BaseModel):
     state: GameStateResponse
     
 class JoinRoomRequest(BaseModel):
-    player_name: str
+    pass
 
 class JoinRoomResponse(BaseModel):
     room_code: str
     state: GameStateResponse
     
 class StartRoomRequest(BaseModel):
-    player_name: str
+    pass
 
 class StartRoomResponse(BaseModel):
     room_code: str
@@ -59,28 +58,26 @@ class RoomStateResponse(BaseModel):
     state: GameStateResponse
     
 class DrawCardRequest(BaseModel):
-    player_name: str
+    pass
 
 class DrawCardResponse(BaseModel):
     card: CardResponse
     state: GameStateResponse
 
 class PlaceCardRequest(BaseModel):
-    player_name: str
     row_index: int
 
 class PlaceCardResponse(BaseModel):
     state: GameStateResponse
 
 class TakeRowRequest(BaseModel):
-    player_name: str
     row_index: int
 
 class TakeRowResponse(BaseModel):
     state: GameStateResponse
 
 class LeaveRoomRequest(BaseModel):
-    player_name: str
+    pass
 
 class LeaveRoomResponse(BaseModel):
     state: GameStateResponse
@@ -95,8 +92,25 @@ class RoomsListResponse(BaseModel):
     rooms: list[RoomSummary]
 
 class ObserveRoomRequest(BaseModel):
-    observer_name: str
+    pass
 
 class ObserveRoomResponse(BaseModel):
     room_code: str
     state: GameStateResponse
+    
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class RegisterResponse(BaseModel):
+    username: str
+    email: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

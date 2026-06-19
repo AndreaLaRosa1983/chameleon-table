@@ -1,0 +1,145 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+  background: #162016;
+  color: #e8dfc8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  font-family: 'Georgia', serif;
+  overflow: hidden;
+}
+
+.formWrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 380px;
+}
+
+.logo {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logoTitle {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #d4a843;
+  letter-spacing: 1px;
+}
+
+.logoSub {
+  font-size: 0.75rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #6a8a5a;
+  margin-top: 4px;
+}
+
+.card {
+  width: 100%;
+  background: rgba(30, 46, 30, 0.92);
+  border: 1px solid #2e4a2e;
+  border-radius: 12px;
+  padding: 1.75rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.cardTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #6a8a5a;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.input {
+  background: #162016;
+  border: 1px solid #2e4a2e;
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: #e8dfc8;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+
+  &::placeholder {
+    color: #3a5a3a;
+  }
+
+  &:focus {
+    border-color: #6a8a5a;
+  }
+}
+
+.btnPrimary {
+  background: #d4a843;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 20px;
+  color: #162016;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  letter-spacing: 0.5px;
+  margin-top: 6px;
+
+  &:hover:not(:disabled) {
+    background: #e0b94f;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.error {
+  background: #2e1a1a;
+  border: 1px solid #5a2a2a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #e08080;
+  font-size: 13px;
+}
+
+.switchLink {
+  text-align: center;
+  font-size: 13px;
+  color: #6a8a5a;
+  margin-top: 8px;
+
+  button {
+    background: none;
+    border: none;
+    color: #d4a843;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+
+    &:hover {
+      color: #e0b94f;
+    }
+  }
+}

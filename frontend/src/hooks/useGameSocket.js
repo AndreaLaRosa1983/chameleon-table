@@ -1,19 +1,21 @@
 import { useEffect, useRef } from 'react'
 import useGameStore from '../store/useGameStore'
+import useAuthStore from '../store/useAuthStore'
 
 const WS_URL = import.meta.env.VITE_WS_URL
 
-const useGameSocket = (roomCode, playerName) => {
+const useGameSocket = (roomCode) => {
   const setGameState = useGameStore((state) => state.setGameState)
+  const token = useAuthStore((state) => state.token)
   const wsRef = useRef(null)
 
   useEffect(() => {
-    if (!roomCode || !playerName) return
+    if (!roomCode || !token) return
 
     const timer = setTimeout(() => {
-      const ws = new WebSocket(`${WS_URL}/ws/${roomCode}/${encodeURIComponent(playerName)}`)
+      const ws = new WebSocket(`${WS_URL}/ws/${roomCode}?token=${encodeURIComponent(token)}`)
       wsRef.current = ws
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
         console.log('WS received:', data.current_turn, data.phase)
@@ -35,7 +37,7 @@ const useGameSocket = (roomCode, playerName) => {
         wsRef.current.close()
       }
     }
-  }, [roomCode, playerName])
+  }, [roomCode, token])
 
   return wsRef
 }

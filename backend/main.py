@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, Depends
 from backend.ws_manager import manager
 from backend.state import games, game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks
 from backend.schemas import (
@@ -21,7 +21,9 @@ import string
 from asyncio import create_task
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-
+from backend.auth import hash_password, verify_password, create_access_token, get_current_user
+from backend.database import get_user, create_user
+from backend.schemas import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,7 +62,7 @@ async def health():
     return {"status": "ok"}
 
 @app.post("/rooms", response_model=CreateRoomResponse)
-async def create_room(request: CreateRoomRequest):
+async def create_room(request: CreateRoomRequest, username: str = Depends(get_current_user)):
     room_code = generate_room_code()
     attempts = 0
     while room_code in games or await room_code_exists(room_code):
@@ -68,7 +70,7 @@ async def create_room(request: CreateRoomRequest):
         attempts += 1
         if attempts > 1000:
             raise HTTPException(status_code=503, detail="No room codes available")
-    state = create_game(room_code, [request.player_name])
+    state = create_game(room_code, [username])
     state.max_players = request.max_players
     games[room_code] = state
     return CreateRoomResponse(
@@ -77,7 +79,7 @@ async def create_room(request: CreateRoomRequest):
     )
 
 @app.post("/rooms/{room_code}/join", response_model=JoinRoomResponse)
-async def join_room(room_code: str, request: JoinRoomRequest):
+async def join_room(room_code: str, request: JoinRoomRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
@@ -85,10 +87,10 @@ async def join_room(room_code: str, request: JoinRoomRequest):
             raise HTTPException(status_code=400, detail="Game already started")
         if len(games[room_code].players) >= games[room_code].max_players:
             raise HTTPException(status_code=400, detail="Room is full")
-        if any(p.name == request.player_name for p in games[room_code].players):
+        if any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=400, detail="Same Player Error")
-        games[room_code].players.append(Player(name=request.player_name))
-        games[room_code].turn_order.append(request.player_name)
+        games[room_code].players.append(Player(name=username))
+        games[room_code].turn_order.append(username)
         await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
         return JoinRoomResponse(
             room_code=room_code,
@@ -96,13 +98,13 @@ async def join_room(room_code: str, request: JoinRoomRequest):
         )
 
 @app.post("/rooms/{room_code}/start", response_model=StartRoomResponse)
-async def start_room(room_code: str, request: StartRoomRequest):
+async def start_room(room_code: str, request: StartRoomRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         if games[room_code].phase != GamePhase.WAITING:
             raise HTTPException(status_code=400, detail="Game already started")
-        if not any(p.name == request.player_name for p in games[room_code].players):
+        if not any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=403, detail="Only a player can start the game")
         if len(games[room_code].players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
@@ -128,18 +130,18 @@ async def room_state(room_code: str):
     )
 
 @app.post("/rooms/{room_code}/draw", response_model=DrawCardResponse)
-async def draw(room_code: str, request: DrawCardRequest):
+async def draw(room_code: str, request: DrawCardRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         if games[room_code].phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == request.player_name for p in games[room_code].players):
+        if not any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=403, detail="Only a player can draw a card")
         if games[room_code].pending_card is not None:
             raise HTTPException(status_code=400, detail="You have a pending card to place")
         try:
-            state, card = draw_card(games[room_code], request.player_name)
+            state, card = draw_card(games[room_code], username)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         state.pending_card = card
@@ -153,19 +155,19 @@ async def draw(room_code: str, request: DrawCardRequest):
         )
 
 @app.post("/rooms/{room_code}/place", response_model=PlaceCardResponse)
-async def place(room_code: str, request: PlaceCardRequest):
+async def place(room_code: str, request: PlaceCardRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         if games[room_code].phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == request.player_name for p in games[room_code].players):
+        if not any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=403, detail="Only a player can place a card")
         if games[room_code].pending_card is None:
             raise HTTPException(status_code=400, detail="No pending card to place")
         try:
             card = games[room_code].pending_card
-            state = place_card(games[room_code], request.player_name, request.row_index, card)
+            state = place_card(games[room_code], username, request.row_index, card)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         state.pending_card = None
@@ -178,18 +180,18 @@ async def place(room_code: str, request: PlaceCardRequest):
         )
 
 @app.post("/rooms/{room_code}/take-row", response_model=TakeRowResponse)
-async def take_row_endpoint(room_code: str, request: TakeRowRequest):
+async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         if games[room_code].phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == request.player_name for p in games[room_code].players):
+        if not any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=403, detail="Only a player can take a row")
         if games[room_code].pending_card:
             raise HTTPException(status_code=400, detail="There is a pending card, can't take a row")
         try:
-            state = take_row(games[room_code], request.player_name, request.row_index)
+            state = take_row(games[room_code], username, request.row_index)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         games[room_code] = state
@@ -207,13 +209,13 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest):
         )
 
 @app.post("/rooms/{room_code}/leave", response_model=LeaveRoomResponse)
-async def leave(room_code: str, request: LeaveRoomRequest):
+async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if not any(p.name == request.player_name for p in games[room_code].players):
+        if not any(p.name == username for p in games[room_code].players):
             raise HTTPException(status_code=403, detail="Player not in room")
-        player = next(p for p in games[room_code].players if p.name == request.player_name)
+        player = next(p for p in games[room_code].players if p.name == username)
         player.active = False
         player.left = True
         active_players = sum(1 for p in games[room_code].players if p.active)
@@ -257,14 +259,14 @@ async def get_rooms_active():
     return RoomsListResponse(rooms=rooms)
 
 @app.post("/rooms/{room_code}/observe", response_model=ObserveRoomResponse)
-async def observe(room_code: str, request: ObserveRoomRequest):
+async def observe(room_code: str, request: ObserveRoomRequest, username: str = Depends(get_current_user)):
     if room_code not in games:
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         if games[room_code].phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started yet")
         try:
-            state = add_observer(games[room_code], request.observer_name)
+            state = add_observer(games[room_code], username)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         games[room_code] = state
@@ -276,5 +278,19 @@ async def observe(room_code: str, request: ObserveRoomRequest):
             state=game_state_to_response(games[room_code])
         )
         
+@app.post("/register", response_model=RegisterResponse)
+async def register(request: RegisterRequest):
+    existing = await get_user(request.username)
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    hashed = hash_password(request.password)
+    user = await create_user(request.username, request.email, hashed)
+    return RegisterResponse(username=user.username, email=user.email)
 
-
+@app.post("/login", response_model=LoginResponse)
+async def login(request: LoginRequest):
+    user = await get_user(request.username)
+    if not user or not verify_password(request.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token(user.username)
+    return LoginResponse(access_token=token)
