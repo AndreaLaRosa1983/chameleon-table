@@ -15,9 +15,8 @@ services:
     build: ./backend
     expose:
       - "8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://chameleon:password@db:5432/chameleon
-      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -33,10 +32,8 @@ services:
 
   db:
     image: postgres:15
-    environment:
-      POSTGRES_USER: chameleon
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: chameleon
+    env_file:
+      - .env
     volumes:
       - db_data:/var/lib/postgresql/data
     expose:
