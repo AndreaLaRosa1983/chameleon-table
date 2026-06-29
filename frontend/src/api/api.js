@@ -1,6 +1,6 @@
 import useAuthStore from '../store/useAuthStore'
 
-const BASE_URL = '/api.js'
+const BASE_URL = '/api'
 
 function authHeaders() {
   const token = useAuthStore.getState().token
