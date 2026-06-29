@@ -356,7 +356,7 @@ async def debug_finish(room_code: str):
 @app.post("/register", response_model=RegisterResponse)
 async def register(request: RegisterRequest):
     if os.getenv("REGISTRATION_ENABLED", "true").lower() == "false":
-    raise HTTPException(status_code=403, detail="Registration is disabled")
+        raise HTTPException(status_code=403, detail="Registration is disabled")
     existing = await get_user(request.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
