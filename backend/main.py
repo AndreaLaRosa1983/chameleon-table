@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, WebSocket, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from backend.ws_manager import manager
-from backend.state import games, game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks
+from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -11,11 +11,13 @@ from backend.schemas import (
     TakeRowRequest, TakeRowResponse,
     CardResponse, LeaveRoomRequest,
     LeaveRoomResponse, RoomsListResponse,
-    RoomSummary, ObserveRoomRequest, ObserveRoomResponse)
-from backend.game import create_game, draw_card, place_card, take_row, add_observer, end_round, create_rows, assign_initial_colors, create_deck
+    RoomSummary, ObserveRoomRequest, ObserveRoomResponse,
+    LeaveObserveRequest, LeaveObserveResponse)
+from backend.game import create_game, draw_card, place_card, remove_observer, take_row, add_observer, end_round, create_rows, assign_initial_colors, create_deck
 from backend.models import GamePhase, Player
 from backend.ws_routes import router as ws_router
 from backend.database import room_code_exists, init_db, load_active_games, save_game
+from backend.redis_store import get_game, set_game, game_exists, get_all_game_keys
 import random
 import string
 from asyncio import create_task
@@ -24,25 +26,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.auth import hash_password, verify_password, create_access_token, get_current_user
 from backend.database import get_user, create_user
 from backend.schemas import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
+from backend.game import calculate_score
+from backend.redis_store import init_redis, close_redis
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
+    # SETUP
+    await init_redis()  
     await init_db()
     active_games = await load_active_games()
     for state in active_games:
+        existing = await get_game(state.room_code)
+        if existing is not None:
+            continue
         state.sequence_number += 1
         for player in state.players:
             if player.active:
                 player.active = False
-        games[state.room_code] = state
+        await set_game(state.room_code, state)
         for player in state.players:
             if not player.left:
                 task = create_task(handle_disconnection(state.room_code, player.name))
                 disconnection_tasks[f"{state.room_code}_{player.name}"] = task
     yield
-    # shutdown (vuoto per ora)
-app = FastAPI(lifespan=lifespan)  
+    
+    await close_redis()  
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,7 +62,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ws_router)  
+app.include_router(ws_router)
 
 def generate_room_code() -> str:
     return "".join(random.choices(string.ascii_uppercase, k=6))
@@ -65,14 +75,14 @@ async def health():
 async def create_room(request: CreateRoomRequest, username: str = Depends(get_current_user)):
     room_code = generate_room_code()
     attempts = 0
-    while room_code in games or await room_code_exists(room_code):
+    while await game_exists(room_code) or await room_code_exists(room_code):
         room_code = generate_room_code()
         attempts += 1
         if attempts > 1000:
             raise HTTPException(status_code=503, detail="No room codes available")
     state = create_game(room_code, [username])
     state.max_players = request.max_players
-    games[room_code] = state
+    await set_game(room_code, state)
     return CreateRoomResponse(
         room_code=room_code,
         state=game_state_to_response(state)
@@ -80,204 +90,268 @@ async def create_room(request: CreateRoomRequest, username: str = Depends(get_cu
 
 @app.post("/rooms/{room_code}/join", response_model=JoinRoomResponse)
 async def join_room(room_code: str, request: JoinRoomRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.WAITING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.WAITING:
             raise HTTPException(status_code=400, detail="Game already started")
-        if len(games[room_code].players) >= games[room_code].max_players:
+        if len(state.players) >= state.max_players:
             raise HTTPException(status_code=400, detail="Room is full")
-        if any(p.name == username for p in games[room_code].players):
+        if any(p.name == username for p in state.players):
             raise HTTPException(status_code=400, detail="Same Player Error")
-        games[room_code].players.append(Player(name=username))
-        games[room_code].turn_order.append(username)
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        state.players.append(Player(name=username))
+        state.turn_order.append(username)
+        await set_game(room_code, state)
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return JoinRoomResponse(
             room_code=room_code,
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.post("/rooms/{room_code}/start", response_model=StartRoomResponse)
 async def start_room(room_code: str, request: StartRoomRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.WAITING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.WAITING:
             raise HTTPException(status_code=400, detail="Game already started")
-        if not any(p.name == username for p in games[room_code].players):
+        if not any(p.name == username for p in state.players):
             raise HTTPException(status_code=403, detail="Only a player can start the game")
-        if len(games[room_code].players) < 2:
+        if len(state.players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
-        games[room_code].phase = GamePhase.PLAYING
-        games[room_code].rows = create_rows(len(games[room_code].players))
-        assigned_colors = assign_initial_colors(games[room_code].players)
-        games[room_code].deck = create_deck(len(games[room_code].players), assigned_colors)
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        state.phase = GamePhase.PLAYING
+        state.rows = create_rows(len(state.players))
+        assigned_colors = assign_initial_colors(state.players)
+        state.deck = create_deck(len(state.players), assigned_colors)
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return StartRoomResponse(
             room_code=room_code,
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.get("/rooms/{room_code}/state", response_model=RoomStateResponse)
 async def room_state(room_code: str):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
+    state = await get_game(room_code)
     return RoomStateResponse(
         room_code=room_code,
-        state=game_state_to_response(games[room_code])
+        state=game_state_to_response(state)
     )
 
 @app.post("/rooms/{room_code}/draw", response_model=DrawCardResponse)
 async def draw(room_code: str, request: DrawCardRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.PLAYING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == username for p in games[room_code].players):
+        if not any(p.name == username for p in state.players):
             raise HTTPException(status_code=403, detail="Only a player can draw a card")
-        if games[room_code].pending_card is not None:
+        if state.pending_card is not None:
             raise HTTPException(status_code=400, detail="You have a pending card to place")
         try:
-            state, card = draw_card(games[room_code], username)
+            state, card = draw_card(state, username)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         state.pending_card = card
-        games[room_code] = state
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return DrawCardResponse(
             card=CardResponse(card_type=card.card_type, color=card.color),
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.post("/rooms/{room_code}/place", response_model=PlaceCardResponse)
 async def place(room_code: str, request: PlaceCardRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.PLAYING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == username for p in games[room_code].players):
+        if not any(p.name == username for p in state.players):
             raise HTTPException(status_code=403, detail="Only a player can place a card")
-        if games[room_code].pending_card is None:
+        if state.pending_card is None:
             raise HTTPException(status_code=400, detail="No pending card to place")
         try:
-            card = games[room_code].pending_card
-            state = place_card(games[room_code], username, request.row_index, card)
+            card = state.pending_card
+            state = place_card(state, username, request.row_index, card)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         state.pending_card = None
-        games[room_code] = state
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return PlaceCardResponse(
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.post("/rooms/{room_code}/take-row", response_model=TakeRowResponse)
 async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.PLAYING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
-        if not any(p.name == username for p in games[room_code].players):
+        if not any(p.name == username for p in state.players):
             raise HTTPException(status_code=403, detail="Only a player can take a row")
-        if games[room_code].pending_card:
+        if state.pending_card:
             raise HTTPException(status_code=400, detail="There is a pending card, can't take a row")
         try:
-            state = take_row(games[room_code], username, request.row_index)
+            state = take_row(state, username, request.row_index)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        games[room_code] = state
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
-        if all(p.passed for p in games[room_code].players if p.active):
-            state = end_round(games[room_code])
-            games[room_code] = state
-            advance_sequence(room_code)
-            await save_game(room_code, games[room_code])
-            await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+        if all(p.passed for p in state.players if p.active):
+            state = end_round(state)
+            await set_game(room_code, state)
+            state = await advance_sequence(room_code)
+            try:
+                await save_game(room_code, state)
+            except Exception as e:
+                print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+            await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return TakeRowResponse(
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.post("/rooms/{room_code}/leave", response_model=LeaveRoomResponse)
 async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if not any(p.name == username for p in games[room_code].players):
+        state = await get_game(room_code)
+        if not any(p.name == username for p in state.players):
             raise HTTPException(status_code=403, detail="Player not in room")
-        player = next(p for p in games[room_code].players if p.name == username)
+        player = next(p for p in state.players if p.name == username)
         player.active = False
         player.left = True
-        active_players = sum(1 for p in games[room_code].players if p.active)
-        initial_players = len(games[room_code].players)
+        active_players = sum(1 for p in state.players if p.active)
+        initial_players = len(state.players)
         if active_players <= initial_players - 2:
-            games[room_code].phase = GamePhase.ABORTED
-        games[room_code] = games[room_code]
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+            state.phase = GamePhase.ABORTED
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return LeaveRoomResponse(
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
 
 @app.get("/rooms", response_model=RoomsListResponse)
 async def get_rooms():
-    rooms = [
-        RoomSummary(
-            room_code=code,
-            players=len(state.players),
-            max_players=state.max_players,
-            phase=state.phase
-        )
-        for code, state in games.items()
-        if state.phase == GamePhase.WAITING
-    ]
+    room_codes = await get_all_game_keys()
+    rooms = []
+    for code in room_codes:
+        state = await get_game(code)
+        if state and state.phase == GamePhase.WAITING:
+            rooms.append(RoomSummary(
+                room_code=code,
+                players=len(state.players),
+                max_players=state.max_players,
+                phase=state.phase
+            ))
     return RoomsListResponse(rooms=rooms)
 
 @app.get("/rooms/active", response_model=RoomsListResponse)
 async def get_rooms_active():
-    rooms = [
-        RoomSummary(
-            room_code=code,
-            players=len(state.players),
-            max_players=state.max_players,
-            phase=state.phase
-        )
-        for code, state in games.items()
-        if state.phase == GamePhase.PLAYING
-    ]
+    room_codes = await get_all_game_keys()
+    rooms = []
+    for code in room_codes:
+        state = await get_game(code)
+        if state and state.phase == GamePhase.PLAYING:
+            rooms.append(RoomSummary(
+                room_code=code,
+                players=len(state.players),
+                max_players=state.max_players,
+                phase=state.phase
+            ))
     return RoomsListResponse(rooms=rooms)
 
 @app.post("/rooms/{room_code}/observe", response_model=ObserveRoomResponse)
 async def observe(room_code: str, request: ObserveRoomRequest, username: str = Depends(get_current_user)):
-    if room_code not in games:
+    if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
-        if games[room_code].phase != GamePhase.PLAYING:
+        state = await get_game(room_code)
+        if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started yet")
         try:
-            state = add_observer(games[room_code], username)
+            state = add_observer(state, username)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        games[room_code] = state
-        advance_sequence(room_code)
-        await save_game(room_code, games[room_code])
-        await manager.broadcast(room_code, game_state_to_response(games[room_code]).model_dump(mode='json'))
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return ObserveRoomResponse(
             room_code=room_code,
-            state=game_state_to_response(games[room_code])
+            state=game_state_to_response(state)
         )
         
+        
+@app.post("/rooms/{room_code}/leave-observe", response_model=LeaveObserveResponse)
+async def leave_observe(room_code: str, request: LeaveObserveRequest, username: str = Depends(get_current_user)):
+    if not await game_exists(room_code):
+        raise HTTPException(status_code=404, detail="Room not found")
+    async with get_lock(room_code):
+        state = await get_game(room_code)
+        try:
+            state = remove_observer(state, username)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        await set_game(room_code, state)
+        state = await advance_sequence(room_code)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+        return LeaveObserveResponse(
+            room_code=room_code,
+            state=game_state_to_response(state)
+        )
+''' for debug purpose to end a match istantly'''
+''' @app.post("/rooms/{room_code}/debug-finish")  
+async def debug_finish(room_code: str):
+    state = await get_game(room_code)
+    state.phase = GamePhase.FINISHED
+    await set_game(room_code, state)
+    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+    return {"ok": True} '''
+
 @app.post("/register", response_model=RegisterResponse)
 async def register(request: RegisterRequest):
     existing = await get_user(request.username)
@@ -294,3 +368,31 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token(user.username)
     return LoginResponse(access_token=token)
+
+@app.get("/rooms/{room_code}/scores")
+async def get_scores(room_code: str):
+    state = await get_game(room_code)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if state.phase != GamePhase.FINISHED:
+        raise HTTPException(status_code=400, detail="Game not finished yet")
+    return calculate_score(state)
+
+@app.post("/rooms/{room_code}/abort")
+async def abort_game(room_code: str, username: str = Depends(get_current_user)):
+    if not await game_exists(room_code):
+        raise HTTPException(status_code=404, detail="Room not found")
+    async with get_lock(room_code):
+        state = await get_game(room_code)
+        if state.phase != GamePhase.WAITING:
+            raise HTTPException(status_code=400, detail="Game already started")
+        if state.turn_order[0] != username:
+            raise HTTPException(status_code=403, detail="Only the host can abort the game")
+        state.phase = GamePhase.ABORTED
+        await set_game(room_code, state)
+        try:
+            await save_game(room_code, state)
+        except Exception as e:
+            print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
+        await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+        return {"ok": True}

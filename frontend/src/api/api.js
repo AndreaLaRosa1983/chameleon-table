@@ -1,6 +1,6 @@
 import useAuthStore from '../store/useAuthStore'
 
-const BASE_URL = 'http://localhost:8000'
+const BASE_URL = '/api.js'
 
 function authHeaders() {
   const token = useAuthStore.getState().token
@@ -114,6 +114,34 @@ export const takeRow = async (roomCode, rowIndex) => {
 
 export const leaveRoom = async (roomCode) => {
   const res = await fetch(`${BASE_URL}/rooms/${roomCode}/leave`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export const getScores = async (roomCode) => {
+  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/scores`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export const abortGame = async (roomCode) => {
+  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/abort`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export const leaveObserve = async (roomCode) => {
+  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/leave-observe`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),

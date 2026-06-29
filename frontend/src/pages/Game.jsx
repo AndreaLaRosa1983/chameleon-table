@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
-import { drawCard, placeCard, takeRow } from '../api/api'
+import { drawCard, placeCard, takeRow, leaveRoom } from '../api/api'
 import { COLOR_ASSETS, CARD_TYPE_ASSETS, CARD_LG_H } from '../constants'
 import { MY_NAME, MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
+
+const TURN_TIMEOUT = 120
 
 function groupCards(cards) {
   const counts = {}
@@ -27,6 +29,50 @@ function cardAsset(card) {
   return CARD_TYPE_ASSETS[card.card_type] || null
 }
 
+function TurnTimer({ timeLeft }) {
+  const TOTAL = 120
+  const sliceSeconds = TOTAL / 6
+  const activeSlices = Math.ceil(timeLeft / sliceSeconds)
+
+  const sliceColors = [
+    '#1D9E75',
+    '#1D9E75',
+    '#1D9E75',
+    '#BA7517',
+    '#BA7517',
+    '#E24B4A',
+  ]
+
+  const slices = [
+    "M0,0 L36,0 A36,36,0,0,0,18,-31.2 Z",
+    "M0,0 L18,-31.2 A36,36,0,0,0,-18,-31.2 Z",
+    "M0,0 L-18,-31.2 A36,36,0,0,0,-36,0 Z",
+    "M0,0 L-36,0 A36,36,0,0,0,-18,31.2 Z",
+    "M0,0 L-18,31.2 A36,36,0,0,0,18,31.2 Z",
+    "M0,0 L18,31.2 A36,36,0,0,0,36,0 Z",
+  ]
+
+  return (
+    <svg width="48" height="48" viewBox="0 0 80 80">
+      <g transform="translate(40,40) rotate(-90)">
+        {slices.map((d, i) => {
+          const isActive = i >= (6 - activeSlices)
+          return (
+            <path
+              key={i}
+              d={d}
+              fill={isActive ? sliceColors[i] : 'var(--color-border-tertiary)'}
+              opacity={isActive ? 1 : 0.4}
+              stroke="var(--color-background-primary)"
+              strokeWidth="2"
+            />
+          )
+        })}
+        <circle r="14" fill="var(--color-background-primary)"/>
+      </g>
+    </svg>
+  )
+}
 
 function ColorChip({ color, count, size = 'sm' }) {
   return (
@@ -46,7 +92,16 @@ function Plus2Chip({ count, isMe, size = 'sm' }) {
   )
 }
 
-function PlayerCards({ cards, isMe, size = 'sm' }) {
+function JokerChip({ count, size = 'sm' }) {
+  return (
+    <div className={s.colorChip}>
+      <img src={CARD_TYPE_ASSETS['joker']} alt="joker" className={`${s.cardImg} ${s[size]}`} />
+      <span className={s.chipCount}>{count}</span>
+    </div>
+  )
+}
+
+function PlayerCards({ cards, jokers = [], isMe, size = 'sm' }) {
   const colorCounts = groupCards(cards)
   const plus2 = hasPlus2(cards)
   const plus2Count = countPlus2(cards)
@@ -56,6 +111,7 @@ function PlayerCards({ cards, isMe, size = 'sm' }) {
         <ColorChip key={color} color={color} count={count} size={size} />
       ))}
       {plus2 && <Plus2Chip count={plus2Count} isMe={isMe} size={size} />}
+      {jokers.length > 0 && <JokerChip count={jokers.length} size={size} />}
     </div>
   )
 }
@@ -68,7 +124,7 @@ function PlayerPanel({ player, isMe, isTurn, className = '', cardSize = 'sm' }) 
         {isMe ? `You (${player.name})` : player.name}
         {player.passed && <span className={s.passedBadge}>passed</span>}
       </div>
-      <PlayerCards cards={player.cards} isMe={isMe} size={cardSize} />
+      <PlayerCards cards={player.cards} jokers={player.jokers} isMe={isMe} size={cardSize} />
     </div>
   )
 }
@@ -161,22 +217,53 @@ function ConfirmModal({ rowIndex, onConfirm, onCancel }) {
   )
 }
 
+function LeaveModal({ onConfirm, onCancel }) {
+  return (
+    <div className={s.modalOverlay}>
+      <div className={s.modalBox}>
+        <span className={s.modalTitle}>Leave the game?</span>
+        <span className={s.modalSubtitle}>You won't be able to rejoin.</span>
+        <div className={s.modalButtons}>
+          <button onClick={onConfirm} className={s.btnCancel}>Leave</button>
+          <button onClick={onCancel} className={s.btnConfirm}>Stay</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Game() {
-  const { roomCode, gameState: liveState } = useGameStore()
+  const { roomCode, gameState: liveState, clearSession } = useGameStore()
   const { username } = useAuthStore()
   const [confirmRow, setConfirmRow] = useState(null)
+  const [showLeave, setShowLeave] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT)
   const navigate = useNavigate()
 
   const gameState = liveState ?? MOCK_STATE
   const myName = username ?? MY_NAME
 
- useGameSocket(roomCode)
- 
+  useGameSocket(roomCode)
+
   useEffect(() => {
     if (gameState?.phase === 'finished' || gameState?.phase === 'aborted') {
       navigate(`/results/${roomCode}`)
     }
   }, [gameState?.phase])
+
+  useEffect(() => {
+    setTimeLeft(TURN_TIMEOUT)
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [gameState.current_turn])
 
   const me = gameState.players.find(p => p.name === myName)
   const opponents = gameState.players.filter(p => p.name !== myName)
@@ -209,6 +296,17 @@ export default function Game() {
     catch (e) { console.error('take row error:', e) }
   }
 
+  async function handleLeaveConfirm() {
+    try {
+      await leaveRoom(roomCode)
+      clearSession()
+      navigate('/')
+    } catch (e) {
+      console.error('leave error:', e)
+    }
+    setShowLeave(false)
+  }
+
   return (
     <div className={s.gameTable}>
 
@@ -216,11 +314,21 @@ export default function Game() {
         <ConfirmModal rowIndex={confirmRow} onConfirm={handlePlaceConfirm} onCancel={handlePlaceCancel} />
       )}
 
+      {showLeave && (
+        <LeaveModal onConfirm={handleLeaveConfirm} onCancel={() => setShowLeave(false)} />
+      )}
+
       <div className={s.header}>
         <span className={s.roomCode}>{gameState.room_code}</span>
-        <span className={`${s.turnInfo} ${gameState.last_round ? s.lastRound : ''}`}>
-          {gameState.last_round ? '⚑ last round' : `${gameState.current_turn}'s turn`}
-        </span>
+        <div className={s.headerCenter}>
+          <span className={`${s.turnInfo} ${gameState.last_round ? s.lastRound : ''}`}>
+            {gameState.last_round ? '⚑ last round' : `${gameState.current_turn}'s turn`}
+          </span>
+          {gameState.phase === 'playing' && (
+            <TurnTimer timeLeft={timeLeft} />
+          )}
+        </div>
+        <button className={s.btnLeave} onClick={() => setShowLeave(true)}>Leave</button>
       </div>
 
       {topOpponents.length > 0 && (

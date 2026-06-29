@@ -1,20 +1,33 @@
 version: '3.8'
 
 services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://chameleon:password@db:5432/chameleon
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
-    
+      redis:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
-    ports:
-      - "3000:3000"
+    expose:
+      - "80"
     depends_on:
       - backend
 
@@ -26,13 +39,26 @@ services:
       POSTGRES_DB: chameleon
     volumes:
       - db_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U chameleon"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   db_data:
+  redis_data:

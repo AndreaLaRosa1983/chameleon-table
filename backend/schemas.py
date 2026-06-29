@@ -114,3 +114,10 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    
+class LeaveObserveRequest(BaseModel):
+    pass
+
+class LeaveObserveResponse(BaseModel):
+    room_code: str
+    state: GameStateResponse

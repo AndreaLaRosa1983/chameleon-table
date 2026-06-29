@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
-import { COLOR_ASSETS } from '../constants'
-import { MOCK_FINISHED_STATE, MOCK_ABORTED_STATE, MOCK_SCORES } from '../mocks/mockData'
+import { COLOR_ASSETS, CARD_TYPE_ASSETS } from '../constants'
+import { MOCK_FINISHED_STATE } from '../mocks/mockData'
+import { getScores } from '../api/api'
 import s from './Results.module.scss'
 
 function groupColorCards(cards) {
@@ -22,6 +24,7 @@ function PlayerRow({ player, rank, score }) {
   const isWinner = rank === 1
   const colorCounts = groupColorCards(player.cards)
   const plus2Count = countPlus2(player.cards)
+  const jokerCount = player.jokers?.length ?? 0
 
   return (
     <div className={`${s.playerCard} ${isWinner ? s.winner : ''}`}>
@@ -45,6 +48,12 @@ function PlayerRow({ player, rank, score }) {
               <span>{plus2Count}</span>
             </div>
           )}
+          {jokerCount > 0 && (
+            <div className={s.colorChip}>
+              <img src={CARD_TYPE_ASSETS['joker']} alt="joker" />
+              <span>{jokerCount}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -60,18 +69,25 @@ export default function Results() {
   const navigate = useNavigate()
   const { roomCode } = useParams()
   const { gameState, clearSession } = useGameStore()
+  const [scores, setScores] = useState(null)
 
-  // fall back to mock state when navigating directly to /results/:roomCode
   const state = gameState ?? MOCK_FINISHED_STATE
   const phase = state.phase
   const players = state.players
+  console.log('players jokers:', players.map(p => ({name: p.name, jokers: p.jokers})))
+  useEffect(() => {
+    if (phase === 'finished' && roomCode) {
+      getScores(roomCode)
+        .then(setScores)
+        .catch(e => console.error('Error fetching scores:', e))
+    }
+  }, [phase, roomCode])
 
-  // TODO: replace with real scores from backend once /rooms/{code}/scores exists
-  const scores = MOCK_SCORES
-
-  const ranked = [...players]
-    .filter(p => !p.left)
-    .sort((a, b) => (scores[b.name] ?? 0) - (scores[a.name] ?? 0))
+  const ranked = scores
+    ? [...players]
+        .filter(p => !p.left)
+        .sort((a, b) => (scores[b.name] ?? 0) - (scores[a.name] ?? 0))
+    : []
 
   function handleHome() {
     clearSession()
@@ -89,6 +105,8 @@ export default function Results() {
         <div className={s.abortedMessage}>
           The game was interrupted because too many players disconnected.
         </div>
+      ) : scores === null ? (
+        <div className={s.loading}>Loading scores...</div>
       ) : (
         <div className={s.playersColumn}>
           {ranked.map((player, i) => (

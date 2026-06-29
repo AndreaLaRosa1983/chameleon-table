@@ -5,6 +5,8 @@ import s from './Game.module.scss'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
+import { leaveObserve } from '../api/api.js'
+
 function cardAsset(card) {
   if (!card) return null
   if (card.card_type === 'color') return COLOR_ASSETS[card.color] || null
@@ -117,13 +119,23 @@ function DeckPanel({ count, lastRound }) {
 
 export default function Observer() {
   const { roomCode } = useParams()
+  const navigate = useNavigate()
   const { gameState: liveState } = useGameStore()
   const { username } = useAuthStore()
 
   const gameState = liveState ?? MOCK_STATE
 
   useGameSocket(roomCode)
-  
+
+  async function handleLeave() {
+    try {
+      await leaveObserve(roomCode)
+    } catch (e) {
+      console.error(e)
+    }
+    navigate('/')
+  }
+
   const players = gameState.players
   const mainPlayer = players[0]
   const others = players.slice(1)
@@ -140,6 +152,7 @@ export default function Observer() {
         <span className={`${s.turnInfo} ${gameState.last_round ? s.lastRound : ''}`}>
           {gameState.last_round ? '⚑ last round' : `${gameState.current_turn}'s turn`}
         </span>
+        <button className={s.leaveBtn} onClick={handleLeave}>Leave</button>
       </div>
 
       {topOthers.length > 0 && (

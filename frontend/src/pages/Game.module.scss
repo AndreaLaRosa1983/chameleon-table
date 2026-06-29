@@ -394,3 +394,38 @@ $card-lg-h: 154px;
   font-family: $font;
   cursor: pointer;
 }
+
+.btnLeave {
+  background: transparent;
+  border: 1px solid rgba(226, 75, 74, 0.4);
+  border-radius: 8px;
+  padding: 5px 14px;
+  color: #E24B4A;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: #E24B4A;
+    color: #162016;
+  }
+}
+
+.modalSubtitle {
+  font-size: 13px;
+  color: #6a8a5a;
+  text-align: center;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+
+.headerCenter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+

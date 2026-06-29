@@ -11,6 +11,7 @@ export const COLOR_ASSETS = {
 
 export const CARD_TYPE_ASSETS = {
   plus2: '/assets/cotton.png',
+  joker: '/assets/jocker.png',  // o un asset dedicato se ce l'hai
 }
 
 export const CARD_MD_W = 80

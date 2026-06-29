@@ -3,17 +3,9 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy.pool import NullPool
 from sqlalchemy import Column, String, JSON, DateTime, select
 from datetime import datetime, timezone
-from dataclasses import asdict
-from dacite import from_dict, Config
 from backend.models import GameState
-from enum import Enum
+from backend.serializers import serialize_gamestate, deserialize_gamestate
 import os
-def deserialize_gamestate(data: dict) -> GameState:
-    return from_dict(
-        data_class=GameState,
-        data=data,
-        config=Config(cast=[Enum])
-    )
     
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -56,21 +48,12 @@ class UserRecord(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
-def enum_handler(data):
-    return {
-        k: v.value if isinstance(v, Enum) else v
-        for k, v in data
-    }
 
-def serialize_gamestate(state: GameState) -> dict:
-    return asdict(state, dict_factory=enum_handler)
 
 async def room_code_exists(room_code: str) -> bool:
     async with AsyncSessionLocal() as session:
         existing = await session.get(GameRecord, room_code)
         return existing is not None
-    
     
 async def load_active_games() -> list[GameState]:
     async with AsyncSessionLocal() as session:
