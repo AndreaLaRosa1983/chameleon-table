@@ -344,14 +344,14 @@ async def leave_observe(room_code: str, request: LeaveObserveRequest, username: 
             room_code=room_code,
             state=game_state_to_response(state)
         )
-''' for debug purpose to end a match istantly'''
-''' @app.post("/rooms/{room_code}/debug-finish")  
-async def debug_finish(room_code: str):
-    state = await get_game(room_code)
-    state.phase = GamePhase.FINISHED
-    await set_game(room_code, state)
-    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-    return {"ok": True} '''
+# for debug purpose to end a match istantly
+# @app.post("/rooms/{room_code}/debug-finish")  
+# async def debug_finish(room_code: str):
+#    state = await get_game(room_code)
+#    state.phase = GamePhase.FINISHED
+#    await set_game(room_code, state)
+#    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+#    return {"ok": True} '''
 
 @app.post("/register", response_model=RegisterResponse)
 async def register(request: RegisterRequest):
