@@ -28,6 +28,7 @@ from backend.database import get_user, create_user
 from backend.schemas import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
 from backend.game import calculate_score
 from backend.redis_store import init_redis, close_redis
+import os
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -354,6 +355,8 @@ async def debug_finish(room_code: str):
 
 @app.post("/register", response_model=RegisterResponse)
 async def register(request: RegisterRequest):
+    if os.getenv("REGISTRATION_ENABLED", "true").lower() == "false":
+    raise HTTPException(status_code=403, detail="Registration is disabled")
     existing = await get_user(request.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
