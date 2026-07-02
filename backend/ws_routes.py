@@ -19,6 +19,13 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         await websocket.close(code=4004)
         return
 
+    state = await get_game(room_code)
+    is_player = any(p.name == player_name for p in state.players)
+    is_observer = player_name in state.observers
+    if not is_player and not is_observer:
+        await websocket.close(code=4403)
+        return
+
     task_key = f"{room_code}_{player_name}"
     if task_key in disconnection_tasks:
         disconnection_tasks[task_key].cancel()

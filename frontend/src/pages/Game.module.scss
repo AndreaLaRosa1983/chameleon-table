@@ -428,4 +428,17 @@ $card-lg-h: 154px;
   gap: 2px;
 }
 
+.leaveBtn {
+  background: transparent;
+  color: #e57373;
+  border: 1px solid #e57373;
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
 
+  &:hover {
+    background: rgba(229, 115, 115, 0.1);
+  }
+}

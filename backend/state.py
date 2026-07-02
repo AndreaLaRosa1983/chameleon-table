@@ -115,8 +115,7 @@ async def handle_disconnection(room_code: str, player_name: str):
         if player and not player.active:
             player.left = True
             active_players = sum(1 for p in state.players if p.active)
-            initial_players = len(state.players)
-            if active_players <= initial_players - 2:
+            if active_players < 2:
                 state.phase = GamePhase.ABORTED
             state = await advance_sequence(room_code)
             await set_game(room_code, state)

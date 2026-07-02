@@ -279,7 +279,8 @@ async def get_rooms():
                 room_code=code,
                 players=len(state.players),
                 max_players=state.max_players,
-                phase=state.phase
+                phase=state.phase,
+                players_list=[p.name for p in state.players]
             ))
     return RoomsListResponse(rooms=rooms)
 
@@ -294,7 +295,8 @@ async def get_rooms_active():
                 room_code=code,
                 players=len(state.players),
                 max_players=state.max_players,
-                phase=state.phase
+                phase=state.phase,
+                players_list=[p.name for p in state.players]
             ))
     return RoomsListResponse(rooms=rooms)
 

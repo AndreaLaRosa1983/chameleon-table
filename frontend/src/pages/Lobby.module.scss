@@ -276,3 +276,37 @@
     border-color: #4a6a4a;
   }
 }
+
+.myRoom {
+  background-color: rgba(180, 140, 50, 0.15);
+  border: 1px solid rgba(180, 140, 50, 0.4);
+}
+
+.myBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #b48c32;
+  background: rgba(180, 140, 50, 0.15);
+  border: 1px solid rgba(180, 140, 50, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.btnRejoin {
+  background: #b48c32;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: #c9a03a;
+  }
+}

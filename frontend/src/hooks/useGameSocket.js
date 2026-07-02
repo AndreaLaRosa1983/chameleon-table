@@ -21,7 +21,7 @@ const useGameSocket = (roomCode) => {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
-        if (data.sequence_number <= lastSeqRef.current) {
+        if (data.sequence_number < lastSeqRef.current) {
           console.log('WS ignored stale message:', data.sequence_number)
           return
         }

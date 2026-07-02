@@ -51,7 +51,12 @@ function Lobby() {
     }
   }
 
-  const handleJoin = async (roomCode) => {
+  const handleJoin = async (roomCode, alreadyInRoom) => {
+    if (alreadyInRoom) {
+      setRoomCode(roomCode)
+      navigate(`/waiting/${roomCode}`)
+      return
+    }
     try {
       await joinRoom(roomCode)
       setRoomCode(roomCode)
@@ -112,36 +117,54 @@ function Lobby() {
 
       <div className={s.roomList}>
         {rooms.length === 0 && <div className={s.empty}>No rooms available</div>}
-        {rooms.map((room) => (
-          <div key={room.room_code} className={s.roomItem}>
-            <div>
-              <div className={s.roomCode}>{room.room_code}</div>
-              <div className={s.roomMeta}>{room.players} / {room.max_players} players · waiting</div>
+        {rooms.map((room) => {
+          const alreadyInRoom = room.players_list?.includes(username)
+          return (
+            <div key={room.room_code} className={`${s.roomItem} ${alreadyInRoom ? s.myRoom : ''}`}>
+              <div>
+                <div className={s.roomCode}>
+                  {room.room_code}
+                  {alreadyInRoom && <span className={s.myBadge}>YOU'RE IN</span>}
+                </div>
+                <div className={s.roomMeta}>{room.players} / {room.max_players} players · waiting</div>
+              </div>
+              <button
+                className={alreadyInRoom ? s.btnRejoin : s.btnJoin}
+                onClick={() => handleJoin(room.room_code, alreadyInRoom)}
+              >
+                {alreadyInRoom ? 'Rejoin →' : 'Join →'}
+              </button>
             </div>
-            <button className={s.btnJoin} onClick={() => handleJoin(room.room_code)}>
-              Join →
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className={s.sectionTitle}>Live games</div>
 
       <div className={s.roomList}>
         {activeRooms.length === 0 && <div className={s.empty}>No live games</div>}
-        {activeRooms.map((room) => (
-          <div key={room.room_code} className={`${s.roomItem} ${s.liveItem}`}>
-            <div>
-              <div className={s.roomCode}>
-                {room.room_code} <span className={s.liveBadge}>LIVE</span>
+        {activeRooms.map((room) => {
+          const alreadyInRoom = room.players_list?.includes(username)
+          return (
+            <div key={room.room_code} className={`${s.roomItem} ${s.liveItem}`}>
+              <div>
+                <div className={s.roomCode}>
+                  {room.room_code} <span className={s.liveBadge}>LIVE</span>
+                  {alreadyInRoom && <span className={s.myBadge}>YOU'RE IN</span>}
+                </div>
+                <div className={s.roomMeta}>{room.players} / {room.max_players} players · in progress</div>
               </div>
-              <div className={s.roomMeta}>{room.players} / {room.max_players} players · in progress</div>
+              {alreadyInRoom
+                ? <button className={s.btnRejoin} onClick={() => { setRoomCode(room.room_code); navigate(`/game/${room.room_code}`) }}>
+                    Rejoin →
+                  </button>
+                : <button className={s.btnWatch} onClick={() => handleObserve(room.room_code)}>
+                    👁 Watch
+                  </button>
+              }
             </div>
-            <button className={s.btnWatch} onClick={() => handleObserve(room.room_code)}>
-              👁 Watch
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
     </div>

@@ -245,6 +245,10 @@ export default function Game() {
 
   useGameSocket(roomCode)
 
+  if (!gameState || !gameState.players || gameState.players.length === 0) {
+    return <div className={s.loading}>Loading...</div>
+  }
+
   useEffect(() => {
     if (gameState?.phase === 'finished' || gameState?.phase === 'aborted') {
       navigate(`/results/${roomCode}`)
@@ -266,6 +270,11 @@ export default function Game() {
   }, [gameState.current_turn])
 
   const me = gameState.players.find(p => p.name === myName)
+
+  if (!me) {
+    return <div className={s.loading}>Loading…</div>
+  }
+
   const opponents = gameState.players.filter(p => p.name !== myName)
   const isTurn = gameState.current_turn === myName
   const hasPending = !!gameState.pending_card
