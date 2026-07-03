@@ -120,12 +120,33 @@ def _key(room_code: str) -> str:
     return f"game:{room_code}"
 
 
+async def _repair_from_postgres(room_code: str) -> GameState | None:
+    """
+    Cache-aside recovery: if Redis is missing a room that should still exist
+    (e.g. Redis crashed/restarted and lost its data, but the backend process
+    itself kept running so lifespan()'s startup recovery never ran), fall
+    back to the last state saved in Postgres and repopulate Redis so future
+    reads hit the fast path again.
+    """
+    from backend.database import load_game
+
+    state = await load_game(room_code)
+    if state is None:
+        return None
+
+    client = await get_redis_client()
+    data = json.dumps(serialize_gamestate(state))
+    await client.set(_key(room_code), data, ex=GAME_TTL)
+    print(f"[Redis] Repaired room {room_code} from Postgres after cache miss")
+    return state
+
+
 async def get_game(room_code: str) -> GameState | None:
 
     client = await get_redis_client()
     data = await client.get(_key(room_code))
     if data is None:
-        return None
+        return await _repair_from_postgres(room_code)
     return deserialize_gamestate(json.loads(data))
 
 
@@ -145,7 +166,10 @@ async def delete_game(room_code: str) -> None:
 async def game_exists(room_code: str) -> bool:
 
     client = await get_redis_client()
-    return await client.exists(_key(room_code)) == 1
+    if await client.exists(_key(room_code)) == 1:
+        return True
+    state = await _repair_from_postgres(room_code)
+    return state is not None
 
 
 async def get_all_game_keys() -> list[str]:

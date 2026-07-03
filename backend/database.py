@@ -62,6 +62,21 @@ async def load_active_games() -> list[GameState]:
         )
         records = result.scalars().all()
         return [deserialize_gamestate(record.state_json) for record in records]
+
+
+async def load_game(room_code: str) -> GameState | None:
+    """
+    Load a single room's last persisted state from Postgres, regardless of
+    phase. Used as a cache-aside fallback when Redis is missing a room that
+    should still exist (e.g. Redis lost its data and restarted, but the
+    backend process itself never restarted, so lifespan()'s recovery never ran).
+    """
+    async with AsyncSessionLocal() as session:
+        record = await session.get(GameRecord, room_code)
+        if record is None:
+            return None
+        return deserialize_gamestate(record.state_json)
+
     
 async def save_game(room_code: str, state: GameState):
     async with AsyncSessionLocal() as session:
@@ -92,5 +107,3 @@ async def create_user(username: str, email: str, hashed_password: str) -> UserRe
             )
             session.add(user)
             return user
-
-

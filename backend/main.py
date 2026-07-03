@@ -74,6 +74,13 @@ async def health():
 
 @app.post("/rooms", response_model=CreateRoomResponse)
 async def create_room(request: CreateRoomRequest, username: str = Depends(get_current_user)):
+    room_codes = await get_all_game_keys()
+    for code in room_codes:
+        state = await get_game(code)
+        if state and state.phase in [GamePhase.WAITING, GamePhase.PLAYING]:
+            if any(p.name == username for p in state.players):
+                raise HTTPException(status_code=400, detail="You are already in a game")
+
     room_code = generate_room_code()
     attempts = 0
     while await game_exists(room_code) or await room_code_exists(room_code):
@@ -84,6 +91,7 @@ async def create_room(request: CreateRoomRequest, username: str = Depends(get_cu
     state = create_game(room_code, [username])
     state.max_players = request.max_players
     await set_game(room_code, state)
+    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))  # <-- nuova riga
     return CreateRoomResponse(
         room_code=room_code,
         state=game_state_to_response(state)
@@ -93,6 +101,16 @@ async def create_room(request: CreateRoomRequest, username: str = Depends(get_cu
 async def join_room(room_code: str, request: JoinRoomRequest, username: str = Depends(get_current_user)):
     if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
+    
+    room_codes = await get_all_game_keys()
+    for code in room_codes:
+        if code == room_code:
+            continue
+        state = await get_game(code)
+        if state and state.phase in [GamePhase.WAITING, GamePhase.PLAYING]:
+            if any(p.name == username for p in state.players):
+                raise HTTPException(status_code=400, detail="You are already in a game")
+
     async with get_lock(room_code):
         state = await get_game(room_code)
         if state.phase != GamePhase.WAITING:
@@ -109,7 +127,7 @@ async def join_room(room_code: str, request: JoinRoomRequest, username: str = De
             room_code=room_code,
             state=game_state_to_response(state)
         )
-
+        
 @app.post("/rooms/{room_code}/start", response_model=StartRoomResponse)
 async def start_room(room_code: str, request: StartRoomRequest, username: str = Depends(get_current_user)):
     if not await game_exists(room_code):
@@ -255,7 +273,7 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
         player.left = True
         active_players = sum(1 for p in state.players if p.active)
         initial_players = len(state.players)
-        if active_players <= initial_players - 2:
+        if active_players < initial_players - 2:
             state.phase = GamePhase.ABORTED
         await set_game(room_code, state)
         state = await advance_sequence(room_code)

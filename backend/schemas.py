@@ -31,6 +31,8 @@ class GameStateResponse(BaseModel):
     sequence_number: int = 0
     deck_count: int = 0
     pending_card: Optional[CardResponse] = None
+    inactivity_timeout: int = 10
+    turn_started_at: Optional[float] = None  
 
 class CreateRoomRequest(BaseModel):
     max_players: int = Field(ge=2, le=5)

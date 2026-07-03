@@ -79,5 +79,6 @@ class GameState:
     min_players: int = 2
     max_players: int = 5
     sequence_number: int = 0 
+    turn_started_at: Optional[float] = None    
 
     

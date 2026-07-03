@@ -7,7 +7,7 @@ import s from './Lobby.module.scss'
 
 function Lobby() {
   const navigate = useNavigate()
-  const { setRoomCode } = useGameStore()
+  const { setRoomCode, clearGameState } = useGameStore()
   const { username, clearAuth } = useAuthStore()
 
   const [maxPlayers, setMaxPlayers] = useState(3)
@@ -44,6 +44,7 @@ function Lobby() {
   const handleCreate = async () => {
     try {
       const data = await createRoom(maxPlayers)
+      clearGameState()
       setRoomCode(data.room_code)
       navigate(`/waiting/${data.room_code}`)
     } catch (e) {
@@ -53,12 +54,14 @@ function Lobby() {
 
   const handleJoin = async (roomCode, alreadyInRoom) => {
     if (alreadyInRoom) {
+      clearGameState()
       setRoomCode(roomCode)
       navigate(`/waiting/${roomCode}`)
       return
     }
     try {
       await joinRoom(roomCode)
+      clearGameState()
       setRoomCode(roomCode)
       navigate(`/waiting/${roomCode}`)
     } catch (e) {

@@ -9,7 +9,8 @@ const useGameStore = create(
 
       setRoomCode: (code) => set({ roomCode: code }),
       setGameState: (state) => set({ gameState: state }),
-      clearSession: () => set({ roomCode: null }),
+      clearGameState: () => set({ gameState: null }),
+      clearSession: () => set({ roomCode: null, gameState: null }),
     }),
     {
       name: 'chameleon-storage',

@@ -8,7 +8,7 @@ import { COLOR_ASSETS, CARD_TYPE_ASSETS, CARD_LG_H } from '../constants'
 import { MY_NAME, MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
 
-const TURN_TIMEOUT = 120
+const TURN_TIMEOUT_FALLBACK = 120
 
 function groupCards(cards) {
   const counts = {}
@@ -29,9 +29,8 @@ function cardAsset(card) {
   return CARD_TYPE_ASSETS[card.card_type] || null
 }
 
-function TurnTimer({ timeLeft }) {
-  const TOTAL = 120
-  const sliceSeconds = TOTAL / 6
+function TurnTimer({ timeLeft, total }) {
+  const sliceSeconds = total / 6
   const activeSlices = Math.ceil(timeLeft / sliceSeconds)
 
   const sliceColors = [
@@ -237,11 +236,12 @@ export default function Game() {
   const { username } = useAuthStore()
   const [confirmRow, setConfirmRow] = useState(null)
   const [showLeave, setShowLeave] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT)
+  const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT_FALLBACK)
   const navigate = useNavigate()
 
   const gameState = liveState ?? MOCK_STATE
   const myName = username ?? MY_NAME
+  const totalTime = gameState.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK
 
   useGameSocket(roomCode)
 
@@ -256,18 +256,20 @@ export default function Game() {
   }, [gameState?.phase])
 
   useEffect(() => {
-    setTimeLeft(TURN_TIMEOUT)
+    const startedAt = gameState.turn_started_at
+
+    function computeTimeLeft() {
+      if (!startedAt) return totalTime
+      const elapsed = Date.now() / 1000 - startedAt
+      return Math.max(0, Math.ceil(totalTime - elapsed))
+    }
+
+    setTimeLeft(computeTimeLeft())
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          return 0
-        }
-        return prev - 1
-      })
+      setTimeLeft(computeTimeLeft())
     }, 1000)
     return () => clearInterval(interval)
-  }, [gameState.current_turn])
+  }, [gameState.current_turn, gameState.turn_started_at, totalTime])
 
   const me = gameState.players.find(p => p.name === myName)
 
@@ -334,7 +336,7 @@ export default function Game() {
             {gameState.last_round ? '⚑ last round' : `${gameState.current_turn}'s turn`}
           </span>
           {gameState.phase === 'playing' && (
-            <TurnTimer timeLeft={timeLeft} />
+            <TurnTimer timeLeft={timeLeft} total={totalTime} />
           )}
         </div>
         <button className={s.btnLeave} onClick={() => setShowLeave(true)}>Leave</button>
