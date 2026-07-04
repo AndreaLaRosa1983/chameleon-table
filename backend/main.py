@@ -91,7 +91,7 @@ async def create_room(request: CreateRoomRequest, username: str = Depends(get_cu
     state = create_game(room_code, [username])
     state.max_players = request.max_players
     await set_game(room_code, state)
-    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))  # <-- nuova riga
+    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
     return CreateRoomResponse(
         room_code=room_code,
         state=game_state_to_response(state)
@@ -272,8 +272,7 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
         player.active = False
         player.left = True
         active_players = sum(1 for p in state.players if p.active)
-        initial_players = len(state.players)
-        if active_players < initial_players - 2:
+        if active_players < 2:
             state.phase = GamePhase.ABORTED
         await set_game(room_code, state)
         state = await advance_sequence(room_code)
