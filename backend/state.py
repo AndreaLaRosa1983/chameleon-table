@@ -10,7 +10,7 @@ room_locks: dict[str, Lock] = {}
 disconnection_tasks: dict[str, Task] = {}
 inactivity_tasks: dict[str, Task] = {}  
 
-INACTIVITY_TIMEOUT = 10
+INACTIVITY_TIMEOUT = 60   #lower this for a fastest play or improve for a longest play
 
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
