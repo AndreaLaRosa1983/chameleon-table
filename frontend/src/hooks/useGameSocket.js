@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import useGameStore from '../store/useGameStore'
 import useAuthStore from '../store/useAuthStore'
 
-const WS_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.host}`
+const WS_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 
 const useGameSocket = (roomCode) => {
   const setGameState = useGameStore((state) => state.setGameState)
