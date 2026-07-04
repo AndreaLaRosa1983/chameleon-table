@@ -94,6 +94,7 @@ function Lobby() {
 
       <div className={s.userBar}>
         Logged in as <strong>{username}</strong>
+        <button className={s.btnLogout} onClick={() => navigate('/rules')}>Rules</button>
         <button className={s.btnLogout} onClick={handleLogout}>Logout</button>
       </div>
 

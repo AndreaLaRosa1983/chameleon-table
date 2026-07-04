@@ -6,6 +6,7 @@ import WaitingRoom from './pages/WaitingRoom'
 import Game from './pages/Game'
 import Results from './pages/Results'
 import Observer from './pages/Observer'
+import Rules from './pages/Rules'
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore((state) => state.token)
@@ -23,6 +24,7 @@ function App() {
         <Route path="/game/:roomCode" element={<ProtectedRoute><Game /></ProtectedRoute>} />
         <Route path="/results/:roomCode" element={<ProtectedRoute><Results /></ProtectedRoute>} />
         <Route path="/observe/:roomCode" element={<ProtectedRoute><Observer /></ProtectedRoute>} />
+        <Route path="/rules" element={<ProtectedRoute><Rules /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )
