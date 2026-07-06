@@ -10,142 +10,127 @@ function authHeaders() {
   }
 }
 
+// For invalid token after docker rebuild, on 401, the client's auth state is cleared and the user
+// is sent back to the login page instead of silently failing or leaving a broken game state on screen.
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options)
+
+  if (res.status === 401) {
+    useAuthStore.getState().clearAuth()
+    window.location.href = '/login'
+    throw new Error('Session expired, please log in again')
+  }
+
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 export const register = async (username, email, password) => {
-  const res = await fetch(`${BASE_URL}/register`, {
+  return apiFetch(`${BASE_URL}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, email, password }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const login = async (username, password) => {
-  const res = await fetch(`${BASE_URL}/login`, {
+  return apiFetch(`${BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const createRoom = async (maxPlayers) => {
-  const res = await fetch(`${BASE_URL}/rooms`, {
+  return apiFetch(`${BASE_URL}/rooms`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ max_players: maxPlayers }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const joinRoom = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/join`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/join`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const startRoom = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/start`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/start`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const getRooms = async () => {
-  const res = await fetch(`${BASE_URL}/rooms`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`${BASE_URL}/rooms`)
 }
 
 export const getActiveRooms = async () => {
-  const res = await fetch(`${BASE_URL}/rooms/active`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`${BASE_URL}/rooms/active`)
 }
 
 export const observeRoom = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/observe`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/observe`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const drawCard = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/draw`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/draw`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const placeCard = async (roomCode, rowIndex) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/place`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/place`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ row_index: rowIndex }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const takeRow = async (roomCode, rowIndex) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/take-row`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/take-row`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ row_index: rowIndex }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const leaveRoom = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/leave`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/leave`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const getScores = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/scores`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/scores`, {
     headers: authHeaders(),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const abortGame = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/abort`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/abort`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 export const leaveObserve = async (roomCode) => {
-  const res = await fetch(`${BASE_URL}/rooms/${roomCode}/leave-observe`, {
+  return apiFetch(`${BASE_URL}/rooms/${roomCode}/leave-observe`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
