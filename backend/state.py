@@ -10,8 +10,10 @@ room_locks: dict[str, Lock] = {}
 disconnection_tasks: dict[str, Task] = {}
 inactivity_tasks: dict[str, Task] = {}  
 
-INACTIVITY_TIMEOUT = 60   #lower this for a fastest play or improve for a longest play
 
+INACTIVITY_TIMEOUT = 60       #lower this for a fastest play or improve for a longest play
+GRACE_PERIOD_TIMEOUT = 120    # reconnection grace period after going inactive/disconnecting
+ 
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
         room_locks[room_code] = Lock()
@@ -113,7 +115,7 @@ async def advance_sequence(room_code: str):
 
 async def handle_disconnection(room_code: str, player_name: str):
     from backend.redis_store import get_game, set_game, game_exists
-    await asyncio.sleep(INACTIVITY_TIMEOUT)
+    await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
     if not await game_exists(room_code):
         return
     async with get_lock(room_code):

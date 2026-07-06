@@ -21,6 +21,7 @@ RUN_ID = uuid.uuid4().hex[:8]
 @pytest_asyncio.fixture
 async def fast_timeout(monkeypatch):
     monkeypatch.setattr(state_module, "INACTIVITY_TIMEOUT", 1)
+    monkeypatch.setattr(state_module, "GRACE_PERIOD_TIMEOUT", 1)
     yield
 
 
