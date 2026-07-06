@@ -10,6 +10,27 @@ import s from './Game.module.scss'
 
 const TURN_TIMEOUT_FALLBACK = 120
 
+// Row-capacity corner icons. The "special" two-player layout has three rows
+// with distinct capacities (1, 2, 3) and uses the green set; any other
+// player count uses uniform rows of capacity 3 and the plain/brown icon.
+const CAPACITY_ICON_NORMAL = '/assets/placeholder_3.png'
+const CAPACITY_ICON_GREEN = {
+  1: '/assets/placeholder_1_green.png',
+  2: '/assets/placeholder_2_green.png',
+  3: '/assets/placeholder_3_green.png',
+}
+
+function isSpecialTwoPlayerLayout(rows) {
+  if (!rows || rows.length !== 3) return false
+  const maxes = rows.map(r => r.max_cards).slice().sort((a, b) => a - b)
+  return maxes[0] === 1 && maxes[1] === 2 && maxes[2] === 3
+}
+
+function capacityIcon(row, isSpecialLayout) {
+  if (isSpecialLayout) return CAPACITY_ICON_GREEN[row.max_cards] || CAPACITY_ICON_NORMAL
+  return CAPACITY_ICON_NORMAL
+}
+
 function groupCards(cards) {
   const counts = {}
   for (const c of cards) {
@@ -147,7 +168,7 @@ function StackedRowCards({ cards }) {
   )
 }
 
-function RowPanel({ row, index, canPlace, onPlace, canTake, onTake, forceTake }) {
+function RowPanel({ row, index, canPlace, onPlace, canTake, onTake, forceTake, isSpecialLayout }) {
   const clickablePlace = canPlace && !row.taken_by && row.cards.length < row.max_cards
   const clickableTake = (canTake || forceTake) && !row.taken_by && row.cards.length > 0
   const clickable = clickablePlace || clickableTake
@@ -162,6 +183,14 @@ function RowPanel({ row, index, canPlace, onPlace, canTake, onTake, forceTake })
       onClick={clickable ? handleClick : undefined}
       className={`${s.rowPanel} ${row.taken_by ? s.taken : ''} ${clickable ? s.clickable : ''}`}
     >
+      {!row.taken_by && (
+        <img
+          src={capacityIcon(row, isSpecialLayout)}
+          alt={`max ${row.max_cards} cards`}
+          title={`This row holds up to ${row.max_cards} card${row.max_cards > 1 ? 's' : ''}`}
+          className={s.capacityIcon}
+        />
+      )}
       <span className={s.rowLabel}>
         {index + 1}
         {row.taken_by && <span className={s.takenBy}>· {row.taken_by}</span>}
@@ -281,7 +310,9 @@ export default function Game() {
   const isTurn = gameState.current_turn === myName
   const hasPending = !!gameState.pending_card
   const hasAvailableRow = gameState.rows.some(r => !r.taken_by && r.cards.length < r.max_cards)
+  const hasTakeableRow = gameState.rows.some(r => !r.taken_by && r.cards.length > 0)
   const forceTake = isTurn && hasPending && !hasAvailableRow
+  const isSpecialLayout = isSpecialTwoPlayerLayout(gameState.rows)
 
   const topOpponents = opponents.length >= 3 ? opponents.slice(2) : []
   const leftOpponent = opponents[0] || null
@@ -366,6 +397,7 @@ export default function Game() {
               forceTake={forceTake}
               onTake={handleTakeRow}
               onPlace={handlePlaceRequest}
+              isSpecialLayout={isSpecialLayout}
             />
           ))}
         </div>
@@ -392,6 +424,9 @@ export default function Game() {
             >
               Draw card
             </button>
+            {hasAvailableRow && hasTakeableRow && (
+              <span className={s.altActionHint}>or take a row with cards instead</span>
+            )}
           </div>
         )}
 

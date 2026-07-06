@@ -1,4 +1,3 @@
-
 $color-turn: #EF9F27;
 $color-turn-dark: #BA7517;
 $color-danger: #E24B4A;
@@ -95,9 +94,13 @@ $card-lg-h: 154px;
   border: $color-border-default;
   border-radius: $radius;
   padding: 12px 16px;
+  transition: box-shadow 0.2s;
 
+  // Whose turn it is is now shown as a soft glow instead of a solid border,
+  // so it can never be visually confused with the solid amber border used
+  // on rows/deck to mean "you can click this right now".
   &.isTurn {
-    border: $color-border-turn;
+    box-shadow: 0 0 0 1px rgba($color-turn, 0.4), 0 0 18px rgba($color-turn, 0.35);
   }
 
   &.fullHeight {
@@ -130,6 +133,13 @@ $card-lg-h: 154px;
   border-radius: 50%;
   background: $color-turn;
   display: inline-block;
+  animation: turnPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes turnPulse {
+  0% { box-shadow: 0 0 0 0 rgba($color-turn, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba($color-turn, 0); }
+  100% { box-shadow: 0 0 0 0 rgba($color-turn, 0); }
 }
 
 .passedBadge {
@@ -176,6 +186,7 @@ $card-lg-h: 154px;
 }
 
 .rowPanel {
+  position: relative;
   flex: 1;
   background: $color-bg-panel;
   border: $color-border-default;
@@ -208,6 +219,16 @@ $card-lg-h: 154px;
     margin-left: 6px;
     color: rgba(255, 255, 255, 0.4);
   }
+}
+
+.capacityIcon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: auto;
+  opacity: 0.8;
+  pointer-events: none;
 }
 
 .stackedCards {
@@ -307,7 +328,9 @@ $card-lg-h: 154px;
 .drawButtonWrapper {
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: flex-end;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -327,6 +350,12 @@ $card-lg-h: 154px;
     cursor: not-allowed;
     opacity: 0.4;
   }
+}
+
+.altActionHint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
 }
 
 .takeRowWarning {
