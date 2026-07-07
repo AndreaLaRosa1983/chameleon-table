@@ -17,7 +17,7 @@ from backend.game import create_game, draw_card, place_card, remove_observer, ta
 from backend.models import GamePhase, Player
 from backend.ws_routes import router as ws_router
 from backend.database import room_code_exists, init_db, load_active_games, save_game
-from backend.redis_store import get_game, set_game, game_exists, get_all_game_keys
+from backend.redis_store import get_game, set_game, game_exists, get_all_game_keys, redis_only_exists
 import random
 import string
 from asyncio import create_task
@@ -37,8 +37,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     active_games = await load_active_games()
     for state in active_games:
-        existing = await get_game(state.room_code)
-        if existing is not None:
+        already_in_redis = await redis_only_exists(state.room_code)
+        if already_in_redis:
             continue
         state.sequence_number += 1
         for player in state.players:
