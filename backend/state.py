@@ -13,6 +13,8 @@ inactivity_tasks: dict[str, Task] = {}
 
 INACTIVITY_TIMEOUT = 60       #lower this for a fastest play or improve for a longest play
 GRACE_PERIOD_TIMEOUT = 120    # reconnection grace period after going inactive/disconnecting
+WAITING_ROOM_TIMEOUT = 600    # abort a WATING room nobody started/cancelled within this long
+CLEANUP_CHECK_INTERVAL = 60   #how often the background sweep below checks for stale rooms
  
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
@@ -130,3 +132,37 @@ async def handle_disconnection(room_code: str, player_name: str):
             state = await advance_sequence(room_code)
             await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
     disconnection_tasks.pop(f"{room_code}_{player_name}", None)
+
+
+async def cleanup_stale_waiting_rooms():
+    """
+    Long-lived background sweep, started once from lifespan() at backend
+    startup. Every CLEANUP_CHECK_INTERVAL seconds, scans all rooms and
+    aborts any still in WAITING that nobody started or cancelled within
+    WAITING_ROOM_TIMEOUT since creation.
+
+    Wrapped in try/except per cycle so a single bad room, or a transient
+    Redis hiccup, logs and moves on instead of silently killing this
+    long-running task for good.
+    """
+    from backend.redis_store import get_all_game_keys, get_game, set_game
+
+    while True:
+        await asyncio.sleep(CLEANUP_CHECK_INTERVAL)
+        try:
+            room_codes = await get_all_game_keys()
+            for room_code in room_codes:
+                async with get_lock(room_code):
+                    state = await get_game(room_code)
+                    if state is None:
+                        continue
+                    if state.phase != GamePhase.WAITING:
+                        continue
+                    if time.time() - state.created_at < WAITING_ROOM_TIMEOUT:
+                        continue
+                    state.phase = GamePhase.ABORTED
+                    await set_game(room_code, state)
+                    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+                    print(f"[CLEANUP] Aborted stale waiting room {room_code}")
+        except Exception as e:
+            print(f"[CLEANUP] Error during sweep, will retry next cycle: {e}")

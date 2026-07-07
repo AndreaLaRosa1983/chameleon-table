@@ -79,6 +79,5 @@ class GameState:
     min_players: int = 2
     max_players: int = 5
     sequence_number: int = 0 
-    turn_started_at: Optional[float] = None    
-
-    
+    turn_started_at: Optional[float] = None
+    created_at: float = field(default_factory=time.time)  # set automatically when the room is created
