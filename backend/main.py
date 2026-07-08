@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
         already_in_redis = await redis_only_exists(state.room_code)
         if already_in_redis:
             continue
+        print(f"[LIFESPAN] Restoring room {state.room_code}: marking players inactive and starting grace period timers")
         state.sequence_number += 1
         for player in state.players:
             if player.active:
@@ -54,7 +55,7 @@ async def lifespan(app: FastAPI):
     yield
 
     cleanup_task.cancel()
-    await close_redis()  
+    await close_redis()
 
 app = FastAPI(lifespan=lifespan)
 

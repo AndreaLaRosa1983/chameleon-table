@@ -3,8 +3,9 @@ from jose import JWTError, jwt
 import bcrypt
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+import os
 
-SECRET_KEY = "change-this-key-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", "change-this-key-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
