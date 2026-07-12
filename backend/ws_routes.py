@@ -1,4 +1,5 @@
 import asyncio
+import json
 from fastapi import APIRouter, WebSocket
 from backend.ws_manager import manager
 from backend.state import game_state_to_response, advance_sequence, get_lock, disconnection_tasks, handle_disconnection
@@ -54,7 +55,18 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         state = await get_game(room_code)
         await websocket.send_json(game_state_to_response(state).model_dump(mode='json'))
         while True:
-            await websocket.receive_text()
+            raw_message = await websocket.receive_text()
+            try:
+                message = json.loads(raw_message)
+            except json.JSONDecodeError:
+                continue
+
+            if message.get("type") == "ping":
+                state = await get_game(room_code)
+                await websocket.send_json({
+                    "type": "pong",
+                    "sequence_number": state.sequence_number
+                })
     except Exception:
         async with get_lock(room_code):
             state = await get_game(room_code)
