@@ -5,12 +5,22 @@ from sqlalchemy import Column, String, JSON, DateTime, select
 from datetime import datetime, timezone
 from backend.models import GameState
 from backend.serializers import serialize_gamestate, deserialize_gamestate
+from urllib.parse import urlsplit, urlunsplit
+import asyncpg
 import os
     
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://chameleon:password@localhost:5432/chameleon"
 )
+
+if os.getenv("TESTING") == "1":
+    # Route tests to a separate Postgres database (not just a different
+    # pool) so pytest's DROP TABLE / DELETE FROM (see tests/conftest.py)
+    # never touches dev data. Overrides whatever database name is already
+    # in DATABASE_URL.
+    parts = urlsplit(DATABASE_URL)
+    DATABASE_URL = urlunsplit(parts._replace(path="/chameleon_test"))
 
 if os.getenv("TESTING") == "1":
     kwargs = {"poolclass": NullPool}
@@ -43,6 +53,30 @@ class UserRecord(Base):
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+async def ensure_test_database_exists():
+    
+    # Creates the chameleon_test database if it doesn't exist yet - e.g. on a fresh clone (professor's machine, CI, etc.) 
+    #  where only the default 'chameleon' database exists. Connects to Postgres' 'postgres' maintenance database instead,
+    # since chameleon_test doesn't exist yet and can't be connected to directly. CREATE DATABASE can't run inside a transaction,
+    # but a single asyncpg statement like this defaults to autocommit, so no explicit transaction handling is needed. 
+    # Safe to call every session: the existence check makes it a no-op once the database has been created once
+    # (it persists in the Postgres Docker volume across restarts).
+    
+    parsed = urlsplit(DATABASE_URL)
+    admin_dsn = f"postgresql://{parsed.username}:{parsed.password}@{parsed.hostname}:{parsed.port}/postgres"
+
+    conn = await asyncpg.connect(admin_dsn)
+    try:
+        exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = 'chameleon_test'"
+        )
+        if not exists:
+            await conn.execute("CREATE DATABASE chameleon_test")
+            print("[Test Setup] Created chameleon_test database")
+    finally:
+        await conn.close()
 
 
 async def init_db():

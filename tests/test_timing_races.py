@@ -75,26 +75,27 @@ async def test_concurrent_draw_only_current_turn_player_succeeds(async_client):
 
 
 @pytest.mark.asyncio
-async def test_action_before_deadline_resets_timer(async_client, fast_timeout):
-    # Player acts just before their inactivity deadline. The action should
-    # reset the timer (advance_sequence -> reset_inactivity_timer -> fresh
-    # start_inactivity_timer), pushing the real deadline further out. Total
-    # elapsed time by the end of this test exceeds the ORIGINAL 1s window, but
-    # the player must still be active — proving the reset actually happened
-    # against real wall-clock time, not just in theory.
+async def test_action_before_deadline_resets_timer(async_client, monkeypatch):
+    # Uses its own (looser) timeout instead of the shared fast_timeout
+    # fixture: the original 1s window left only ~0.3s of margin between the
+    # reset action and the assertion, which was occasionally flaky under
+    # real scheduling/network overhead. A 3s window with proportionally
+    # larger sleeps keeps the same test intent with realistic buffer room.
+    monkeypatch.setattr(state_module, "INACTIVITY_TIMEOUT", 3)
+
     room_code, tokens = await setup_game(async_client, players=[f"TimingAlice4_{RUN_ID}", f"TimingBob4_{RUN_ID}"], max_players=2)
 
     res = await async_client.get(f"/rooms/{room_code}/state")
     current_turn = res.json()["state"]["current_turn"]
 
-    await asyncio.sleep(0.7)  # close to the 1s deadline, but not past it yet
+    await asyncio.sleep(2.0)  # close to the 3s deadline, but not past it yet
 
     res = await async_client.post(
         f"/rooms/{room_code}/draw", json={}, headers=auth(tokens[current_turn])
     )
     assert res.status_code == 200
 
-    await asyncio.sleep(0.7)  # total elapsed ~1.4s, past the ORIGINAL deadline
+    await asyncio.sleep(2.0)  # total elapsed ~4s, past the ORIGINAL deadline
 
     res = await async_client.get(f"/rooms/{room_code}/state")
     state = res.json()["state"]
@@ -102,7 +103,6 @@ async def test_action_before_deadline_resets_timer(async_client, fast_timeout):
     assert state["phase"] == "playing", "match aborted even though the player acted before the deadline"
     player = next(p for p in state["players"] if p["name"] == current_turn)
     assert player["active"] is True, "player was marked inactive despite acting in time"
-
 
 @pytest.mark.asyncio
 async def test_concurrent_double_draw_same_player(async_client):

@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from httpx import AsyncClient, ASGITransport
-from backend.database import engine, init_db
+from backend.database import engine, init_db, ensure_test_database_exists
 from backend.main import app
 from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
 
@@ -54,6 +54,7 @@ async def manage_redis_lifecycle():
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_db():
     """Initialize database schema at start of test session."""
+    await ensure_test_database_exists()
     await init_db()
     yield
     # Cleanup after all tests
