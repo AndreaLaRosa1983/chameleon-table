@@ -9,6 +9,7 @@ import { MY_NAME, MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
 
 const TURN_TIMEOUT_FALLBACK = 120
+const GRACE_TIMEOUT_FALLBACK = 120
 
 // Row-capacity corner icons. The "special" two-player layout has three rows
 // with distinct capacities (1, 2, 3) and uses the green set; any other
@@ -50,18 +51,17 @@ function cardAsset(card) {
   return CARD_TYPE_ASSETS[card.card_type] || null
 }
 
-function TurnTimer({ timeLeft, total }) {
+// Same six-slice ring used for the normal turn countdown. When isGrace is
+// true it switches to a distinct color ramp (ambers/reds throughout) so a
+// grace-period countdown reads visually differently from a normal turn,
+// even before the header text is noticed.
+function TurnTimer({ timeLeft, total, isGrace = false }) {
   const sliceSeconds = total / 6
   const activeSlices = Math.ceil(timeLeft / sliceSeconds)
 
-  const sliceColors = [
-    '#1D9E75',
-    '#1D9E75',
-    '#1D9E75',
-    '#BA7517',
-    '#BA7517',
-    '#E24B4A',
-  ]
+  const sliceColors = isGrace
+    ? ['#BA7517', '#BA7517', '#BA7517', '#E24B4A', '#E24B4A', '#E24B4A']
+    : ['#1D9E75', '#1D9E75', '#1D9E75', '#BA7517', '#BA7517', '#E24B4A']
 
   const slices = [
     "M0,0 L36,0 A36,36,0,0,0,18,-31.2 Z",
@@ -136,13 +136,17 @@ function PlayerCards({ cards, jokers = [], isMe, size = 'sm' }) {
   )
 }
 
-function PlayerPanel({ player, isMe, isTurn, className = '', cardSize = 'sm' }) {
+// isGrace is true only when this player both has the current turn AND is
+// currently marked inactive (active: false, not yet left) - i.e. the turn
+// is frozen waiting for them, per the grace-period rule.
+function PlayerPanel({ player, isMe, isTurn, isGrace = false, className = '', cardSize = 'sm' }) {
   return (
     <div className={`${s.playerPanel} ${isTurn ? s.isTurn : ''} ${className}`}>
       <div className={`${s.playerName} ${isTurn ? s.isTurn : ''}`}>
         {isTurn && <span className={s.turnDot} />}
         {isMe ? `You (${player.name})` : player.name}
         {player.passed && <span className={s.passedBadge}>passed</span>}
+        {isTurn && isGrace && <span className={s.graceBadge}>reconnecting…</span>}
       </div>
       <PlayerCards cards={player.cards} jokers={player.jokers} isMe={isMe} size={cardSize} />
     </div>
@@ -270,7 +274,24 @@ export default function Game() {
 
   const gameState = liveState ?? MOCK_STATE
   const myName = username ?? MY_NAME
-  const totalTime = gameState.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK
+
+  // The player currently holding the turn, per turn_order/current_turn. If
+  // they're active=false but still present (not yet left), the turn is
+  // frozen on them per the grace-period rule - this is what we key the
+  // grace-period countdown/badges off of.
+  const currentPlayerObj = gameState.players?.find(p => p.name === gameState.current_turn)
+  const isGracePeriod = !!(currentPlayerObj && !currentPlayerObj.active)
+
+  console.log('[DEBUG grace]', {
+    current_turn: gameState.current_turn,
+    currentPlayerObj,
+    isGracePeriod
+  })
+
+
+  const totalTime = isGracePeriod
+    ? (gameState.grace_period_timeout ?? GRACE_TIMEOUT_FALLBACK)
+    : (gameState.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK)
 
   useGameSocket(roomCode)
 
@@ -363,11 +384,15 @@ export default function Game() {
       <div className={s.header}>
         <span className={s.roomCode}>{gameState.room_code}</span>
         <div className={s.headerCenter}>
-          <span className={`${s.turnInfo} ${gameState.last_round ? s.lastRound : ''}`}>
-            {gameState.last_round ? '⚑ last round' : `${gameState.current_turn}'s turn`}
+          <span className={`${s.turnInfo} ${gameState.last_round ? s.lastRound : ''} ${isGracePeriod ? s.gracePeriod : ''}`}>
+            {gameState.last_round
+              ? '⚑ last round'
+              : isGracePeriod
+                ? `waiting for ${gameState.current_turn} to reconnect…`
+                : `${gameState.current_turn}'s turn`}
           </span>
           {gameState.phase === 'playing' && (
-            <TurnTimer timeLeft={timeLeft} total={totalTime} />
+            <TurnTimer timeLeft={timeLeft} total={totalTime} isGrace={isGracePeriod} />
           )}
         </div>
         <button className={s.btnLeave} onClick={() => setShowLeave(true)}>Leave</button>
@@ -376,7 +401,12 @@ export default function Game() {
       {topOpponents.length > 0 && (
         <div className={s.topOpponents}>
           {topOpponents.map(p => (
-            <PlayerPanel key={p.name} player={p} isMe={false} isTurn={gameState.current_turn === p.name} className={s.flex1} cardSize="sm" />
+            <PlayerPanel
+              key={p.name} player={p} isMe={false}
+              isTurn={gameState.current_turn === p.name}
+              isGrace={isGracePeriod}
+              className={s.flex1} cardSize="sm"
+            />
           ))}
         </div>
       )}
@@ -384,7 +414,12 @@ export default function Game() {
       <div className={s.middleSection}>
         {leftOpponent && (
           <div className={s.opponentSide}>
-            <PlayerPanel player={leftOpponent} isMe={false} isTurn={gameState.current_turn === leftOpponent.name} className={s.fullHeight} cardSize="sm" />
+            <PlayerPanel
+              player={leftOpponent} isMe={false}
+              isTurn={gameState.current_turn === leftOpponent.name}
+              isGrace={isGracePeriod}
+              className={s.fullHeight} cardSize="sm"
+            />
           </div>
         )}
 
@@ -404,14 +439,19 @@ export default function Game() {
 
         {rightOpponent && (
           <div className={s.opponentSide}>
-            <PlayerPanel player={rightOpponent} isMe={false} isTurn={gameState.current_turn === rightOpponent.name} className={s.fullHeight} cardSize="sm" />
+            <PlayerPanel
+              player={rightOpponent} isMe={false}
+              isTurn={gameState.current_turn === rightOpponent.name}
+              isGrace={isGracePeriod}
+              className={s.fullHeight} cardSize="sm"
+            />
           </div>
         )}
       </div>
 
       <div className={s.bottomSection}>
         <div className={s.myPanelWrapper}>
-          <PlayerPanel player={me} isMe={true} isTurn={isTurn} cardSize="md" />
+          <PlayerPanel player={me} isMe={true} isTurn={isTurn} isGrace={isGracePeriod} cardSize="md" />
         </div>
 
         {hasPending && <PendingCardPanel card={gameState.pending_card} hasAvailableRow={hasAvailableRow} />}

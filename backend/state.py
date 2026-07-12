@@ -1,6 +1,7 @@
 from backend.schemas import GameStateResponse, RowResponse, PlayerResponse, CardResponse
 from backend.models import GameState, GamePhase
-from backend.game import current_turn as compute_current_turn
+from backend.game import current_turn as compute_current_turn, end_round
+from backend.redis_store import game_exists, get_all_game_keys, get_game, set_game
 from asyncio import Lock, Task
 import asyncio
 from backend.ws_manager import manager
@@ -57,11 +58,11 @@ def game_state_to_response(state) -> GameStateResponse:
             color=state.pending_card.color
         ) if state.pending_card else None,
         inactivity_timeout=INACTIVITY_TIMEOUT,
+        grace_period_timeout=GRACE_PERIOD_TIMEOUT,
         turn_started_at=state.turn_started_at
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
-    from backend.redis_store import get_game, set_game, game_exists
     await asyncio.sleep(INACTIVITY_TIMEOUT)
     if not await game_exists(room_code):
         return
@@ -98,7 +99,6 @@ def start_inactivity_timer(room_code: str, player_name: str):
     inactivity_tasks[task_key] = task
 
 async def advance_sequence(room_code: str):
-    from backend.redis_store import get_game, set_game
     state = await get_game(room_code)
 
     if state.phase == GamePhase.PLAYING and state.current_turn:
@@ -116,7 +116,6 @@ async def advance_sequence(room_code: str):
     return state
 
 async def handle_disconnection(room_code: str, player_name: str):
-    from backend.redis_store import get_game, set_game, game_exists
     await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
     if not await game_exists(room_code):
         return
@@ -131,6 +130,12 @@ async def handle_disconnection(room_code: str, player_name: str):
             await set_game(room_code, state)
             state = await advance_sequence(room_code)
             await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+
+            if state.phase == GamePhase.PLAYING and all(p.passed for p in state.players if not p.left):
+                state = end_round(state)
+                await set_game(room_code, state)
+                state = await advance_sequence(room_code)
+                await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
     disconnection_tasks.pop(f"{room_code}_{player_name}", None)
 
 
@@ -145,8 +150,6 @@ async def cleanup_stale_waiting_rooms():
     Redis hiccup, logs and moves on instead of silently killing this
     long-running task for good.
     """
-    from backend.redis_store import get_all_game_keys, get_game, set_game
-
     while True:
         await asyncio.sleep(CLEANUP_CHECK_INTERVAL)
         try:

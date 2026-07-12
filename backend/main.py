@@ -126,6 +126,7 @@ async def join_room(room_code: str, request: JoinRoomRequest, username: str = De
         state.players.append(Player(name=username))
         state.turn_order.append(username)
         await set_game(room_code, state)
+        state = await advance_sequence(room_code)
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         return JoinRoomResponse(
             room_code=room_code,
@@ -251,7 +252,7 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: s
         except Exception as e:
             print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-        if all(p.passed for p in state.players if p.active):
+        if all(p.passed for p in state.players if not p.left):
             state = end_round(state)
             await set_game(room_code, state)
             state = await advance_sequence(room_code)
@@ -416,6 +417,7 @@ async def abort_game(room_code: str, username: str = Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="Only the host can abort the game")
         state.phase = GamePhase.ABORTED
         await set_game(room_code, state)
+        state = await advance_sequence(room_code)
         try:
             await save_game(room_code, state)
         except Exception as e:

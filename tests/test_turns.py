@@ -7,18 +7,18 @@ def test_current_turn_returns_first_player():
     state = make_state([{"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"}])
     assert current_turn(state) == "Alice"
 
-def test_current_turn_skips_passed_and_inactive():
+def test_current_turn_skips_passed_and_left():
     state = make_state([
         {"name": "Alice", "passed": True},
-        {"name": "Bob", "active": False},
+        {"name": "Bob", "left": True},
         {"name": "Charlie"},
     ])
     assert current_turn(state) == "Charlie"
 
-def test_current_turn_returns_none_when_all_passed_or_inactive():
+def test_current_turn_returns_none_when_all_passed_or_left():
     state = make_state([
         {"name": "Alice", "passed": True},
-        {"name": "Bob", "active": False},
+        {"name": "Bob", "left": True},
     ])
     assert current_turn(state) is None
 

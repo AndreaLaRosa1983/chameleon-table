@@ -151,6 +151,7 @@ def make_state(player_configs: list[dict]) -> GameState:
         p = Player(name=cfg["name"])
         p.passed = cfg.get("passed", False)
         p.active = cfg.get("active", True)
+        p.left = cfg.get("left", False)
         players.append(p)
 
     return GameState(

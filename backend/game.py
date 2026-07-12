@@ -73,7 +73,7 @@ def create_game(room_code: str, player_names: list[str]) -> GameState:
 def current_turn(state: GameState) -> Optional[str]:
     for name in state.turn_order:
         player = next((p for p in state.players if p.name == name), None)
-        if player and not player.passed and player.active:
+        if player and not player.passed and not player.left:
             return name
     return None
 
@@ -136,7 +136,7 @@ def next_turn(state: GameState, current_player: str) -> GameState:
         next_index = (current_index + i) % n
         next_name = state.turn_order[next_index]
         next_player = next((p for p in state.players if p.name == next_name), None)
-        if next_player and not next_player.passed and next_player.active:
+        if next_player and not next_player.passed and not next_player.left:
             state.turn_order = state.turn_order[next_index:] + state.turn_order[:next_index]
             break
     return state

@@ -32,6 +32,7 @@ class GameStateResponse(BaseModel):
     deck_count: int = 0
     pending_card: Optional[CardResponse] = None
     inactivity_timeout: int = 10
+    grace_period_timeout: int = 120
     turn_started_at: Optional[float] = None  
 
 class CreateRoomRequest(BaseModel):
