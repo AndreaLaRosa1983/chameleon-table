@@ -130,11 +130,7 @@ def _key(room_code: str) -> str:
 
 
 async def _repair_from_postgres(room_code: str) -> GameState | None:
-    # Cache-aside recovery: if Redis is missing a room that should still exist
-    # (e.g. Redis crashed/restarted and lost its data, but the backend process
-    # itself kept running so lifespan()'s startup recovery never ran), fall
-    # back to the last state saved in Postgres and repopulate Redis so future
-    # reads hit the fast path again.
+    # Cache-aside fallback: restore from Postgres if Redis lost data, repopulate cache
     from backend.database import load_game
 
     state = await load_game(room_code)
@@ -149,15 +145,7 @@ async def _repair_from_postgres(room_code: str) -> GameState | None:
 
 
 async def redis_only_exists(room_code: str) -> bool:
-    # Raw existence check against Redis only — no cache-aside repair.
-    # Used by lifespan()'s startup recovery loop to decide whether a room
-    # genuinely already has fresh state in Redis, without triggering
-    # _repair_from_postgres as a side effect of merely checking. Using
-    # get_game()/game_exists() here would be wrong: after a full VM restart
-    # (backend and Redis losing state together), the repair would silently
-    # "restore" every room on the very first check, making the loop always
-    # think each room is already handled and skip marking players inactive
-    # and starting their disconnection timers.
+# Check Redis only (no repair); used by lifespan to avoid double-restoration
     
     client = await get_redis_client()
     return await client.exists(_key(room_code)) == 1

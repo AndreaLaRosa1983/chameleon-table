@@ -15,10 +15,7 @@ DATABASE_URL = os.getenv(
 )
 
 if os.getenv("TESTING") == "1":
-    # Route tests to a separate Postgres database (not just a different
-    # pool) so pytest's DROP TABLE / DELETE FROM (see tests/conftest.py)
-    # never touches dev data. Overrides whatever database name is already
-    # in DATABASE_URL.
+    # Separate test DB (not just pool) to isolate pytest's DROP TABLE/DELETE FROM dev data; overrides DATABASE_URL
     parts = urlsplit(DATABASE_URL)
     DATABASE_URL = urlunsplit(parts._replace(path="/chameleon_test"))
 
@@ -57,12 +54,7 @@ class UserRecord(Base):
 
 async def ensure_test_database_exists():
     
-    # Creates the chameleon_test database if it doesn't exist yet - e.g. on a fresh clone (professor's machine, CI, etc.) 
-    #  where only the default 'chameleon' database exists. Connects to Postgres' 'postgres' maintenance database instead,
-    # since chameleon_test doesn't exist yet and can't be connected to directly. CREATE DATABASE can't run inside a transaction,
-    # but a single asyncpg statement like this defaults to autocommit, so no explicit transaction handling is needed. 
-    # Safe to call every session: the existence check makes it a no-op once the database has been created once
-    # (it persists in the Postgres Docker volume across restarts).
+    # Create test DB if missing, connects to postgres admin DB
     
     parsed = urlsplit(DATABASE_URL)
     admin_dsn = f"postgresql://{parsed.username}:{parsed.password}@{parsed.hostname}:{parsed.port}/postgres"
@@ -99,12 +91,7 @@ async def load_active_games() -> list[GameState]:
 
 
 async def load_game(room_code: str) -> GameState | None:
-    """
-    Load a single room's last persisted state from Postgres, regardless of
-    phase. Used as a cache-aside fallback when Redis is missing a room that
-    should still exist (e.g. Redis lost its data and restarted, but the
-    backend process itself never restarted, so lifespan()'s recovery never ran).
-    """
+    # Cache-aside fallback: load state from Postgres if Redis lost data.
     async with AsyncSessionLocal() as session:
         record = await session.get(GameRecord, room_code)
         if record is None:

@@ -10,19 +10,6 @@ from backend.database import engine, init_db, ensure_test_database_exists
 from backend.main import app
 from backend.models import CardType, CardColor, Player, GameState, GamePhase, Row, Card
 
-
-@pytest.fixture(scope="session")
-def event_loop():
-    
-    loop = asyncio.new_event_loop()
-    yield loop
-    
-    try:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-    finally:
-        loop.close()
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def manage_redis_lifecycle():
     

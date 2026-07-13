@@ -1,7 +1,7 @@
 from backend.schemas import GameStateResponse, RowResponse, PlayerResponse, CardResponse
 from backend.models import GameState, GamePhase
 from backend.game import current_turn as compute_current_turn, end_round
-from backend.redis_store import get_game, set_game, game_exists, get_all_game_keys, get_game, set_game
+from backend.redis_store import game_exists, get_all_game_keys, get_game, set_game
 from asyncio import Lock, Task
 import asyncio
 from backend.ws_manager import manager
@@ -82,27 +82,33 @@ def game_state_to_response(state) -> GameStateResponse:
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
-    await asyncio.sleep(INACTIVITY_TIMEOUT)
-    if not await _room_exists_with_retry(room_code):
-        return
-    async with get_lock(room_code):
-        state = await get_game(room_code)
-        if state.phase != GamePhase.PLAYING:
+    # finally always removes the key (leak-safe). The early pop before
+    # advance_sequence is intentional: it stops the task from cancelling itself
+    # via reset_inactivity_timer (see test_inactivity_full_cycle_does_not_self_cancel).
+    try:
+        await asyncio.sleep(INACTIVITY_TIMEOUT)
+        if not await _room_exists_with_retry(room_code):
             return
-        if state.current_turn != player_name:
-            return
-        player = next((p for p in state.players if p.name == player_name), None)
-        if player and player.active:
-            player.active = False
-            await set_game(room_code, state)
+        async with get_lock(room_code):
+            state = await get_game(room_code)
+            if state.phase != GamePhase.PLAYING:
+                return
+            if state.current_turn != player_name:
+                return
+            player = next((p for p in state.players if p.name == player_name), None)
+            if player and player.active:
+                player.active = False
+                await set_game(room_code, state)
 
-            inactivity_tasks.pop(f"{room_code}_{player_name}", None)
+                inactivity_tasks.pop(f"{room_code}_{player_name}", None)
 
-            state = await advance_sequence(room_code)
-            await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+                state = await advance_sequence(room_code)
+                await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
 
-            task = asyncio.create_task(handle_disconnection(room_code, player_name))
-            disconnection_tasks[f"{room_code}_{player_name}"] = task
+                task = asyncio.create_task(handle_disconnection(room_code, player_name))
+                disconnection_tasks[f"{room_code}_{player_name}"] = task
+    finally:
+        inactivity_tasks.pop(f"{room_code}_{player_name}", None)
 
 async def reset_inactivity_timer(room_code: str, player_name: str):
     
@@ -135,27 +141,30 @@ async def advance_sequence(room_code: str):
     return state
 
 async def handle_disconnection(room_code: str, player_name: str):
-    await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
-    if not await _room_exists_with_retry(room_code):
-        return
-    async with get_lock(room_code):
-        state = await get_game(room_code)
-        player = next((p for p in state.players if p.name == player_name), None)
-        if player and not player.active:
-            player.left = True
-            active_players = sum(1 for p in state.players if not p.left)
-            if active_players < 2:
-                state.phase = GamePhase.ABORTED
-            await set_game(room_code, state)
-            state = await advance_sequence(room_code)
-            await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-
-            if state.phase == GamePhase.PLAYING and all(p.passed for p in state.players if not p.left):
-                state = end_round(state)
+    # finally leak-safe as above; no self-cancel risk here.
+    try:
+        await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
+        if not await _room_exists_with_retry(room_code):
+            return
+        async with get_lock(room_code):
+            state = await get_game(room_code)
+            player = next((p for p in state.players if p.name == player_name), None)
+            if player and not player.active:
+                player.left = True
+                active_players = sum(1 for p in state.players if not p.left)
+                if active_players < 2:
+                    state.phase = GamePhase.ABORTED
                 await set_game(room_code, state)
                 state = await advance_sequence(room_code)
                 await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-    disconnection_tasks.pop(f"{room_code}_{player_name}", None)
+
+                if state.phase == GamePhase.PLAYING and all(p.passed for p in state.players if not p.left):
+                    state = end_round(state)
+                    await set_game(room_code, state)
+                    state = await advance_sequence(room_code)
+                    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
+    finally:
+        disconnection_tasks.pop(f"{room_code}_{player_name}", None)
 
 
 async def cleanup_stale_waiting_rooms():
