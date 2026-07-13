@@ -1,7 +1,7 @@
 from backend.schemas import GameStateResponse, RowResponse, PlayerResponse, CardResponse
 from backend.models import GameState, GamePhase
 from backend.game import current_turn as compute_current_turn, end_round
-from backend.redis_store import game_exists, get_all_game_keys, get_game, set_game
+from backend.redis_store import get_game, set_game, game_exists, get_all_game_keys, get_game, set_game
 from asyncio import Lock, Task
 import asyncio
 from backend.ws_manager import manager
@@ -16,11 +16,31 @@ INACTIVITY_TIMEOUT = 60       #lower this for a fastest play or improve for a lo
 GRACE_PERIOD_TIMEOUT = 120    # reconnection grace period after going inactive/disconnecting
 WAITING_ROOM_TIMEOUT = 600    # abort a WATING room nobody started/cancelled within this long
 CLEANUP_CHECK_INTERVAL = 60   #how often the background sweep below checks for stale rooms
- 
+REDIS_RETRY_ATTEMPTS = 3      # retries for the Redis check right after a background timer wakes up
+REDIS_RETRY_DELAY = 2         # seconds between those retries
+
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
         room_locks[room_code] = Lock()
     return room_locks[room_code]
+
+
+async def _room_exists_with_retry(room_code: str) -> bool:
+    # Retries the Redis check right after a background timer wakes up, sice
+    # these tasks have no caller to report failures to (unlike the try/except
+    # already used for Postgres writes elsewhere). Absorbs a brief Redis blip
+    # at exactly this moment; narrows but doesn't eliminate the risk window,
+    # since a longer outage still causes the task to give up.
+    
+    for attempt in range(REDIS_RETRY_ATTEMPTS):
+        try:
+            return await game_exists(room_code)
+        except Exception as e:
+            print(f"[TIMER] Redis unreachable checking {room_code} (attempt {attempt + 1}/{REDIS_RETRY_ATTEMPTS}): {e}")
+            if attempt < REDIS_RETRY_ATTEMPTS - 1:
+                await asyncio.sleep(REDIS_RETRY_DELAY)
+    print(f"[TIMER] Giving up on {room_code} after {REDIS_RETRY_ATTEMPTS} attempts, Redis still unreachable")
+    return False
 
 def game_state_to_response(state) -> GameStateResponse:
     return GameStateResponse(
@@ -58,13 +78,12 @@ def game_state_to_response(state) -> GameStateResponse:
             color=state.pending_card.color
         ) if state.pending_card else None,
         inactivity_timeout=INACTIVITY_TIMEOUT,
-        grace_period_timeout=GRACE_PERIOD_TIMEOUT,
         turn_started_at=state.turn_started_at
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
     await asyncio.sleep(INACTIVITY_TIMEOUT)
-    if not await game_exists(room_code):
+    if not await _room_exists_with_retry(room_code):
         return
     async with get_lock(room_code):
         state = await get_game(room_code)
@@ -117,7 +136,7 @@ async def advance_sequence(room_code: str):
 
 async def handle_disconnection(room_code: str, player_name: str):
     await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
-    if not await game_exists(room_code):
+    if not await _room_exists_with_retry(room_code):
         return
     async with get_lock(room_code):
         state = await get_game(room_code)
@@ -140,16 +159,12 @@ async def handle_disconnection(room_code: str, player_name: str):
 
 
 async def cleanup_stale_waiting_rooms():
-    """
-    Long-lived background sweep, started once from lifespan() at backend
-    startup. Every CLEANUP_CHECK_INTERVAL seconds, scans all rooms and
-    aborts any still in WAITING that nobody started or cancelled within
-    WAITING_ROOM_TIMEOUT since creation.
-
-    Wrapped in try/except per cycle so a single bad room, or a transient
-    Redis hiccup, logs and moves on instead of silently killing this
-    long-running task for good.
-    """
+    # Background sweep started once from lifespan(). Every
+    # CLEANUP_CHECK_INTERVAL seconds, aborts any room still in WAITING more
+    # than WAITING_ROOM_TIMEOUT since creation. Wrapped in try/except so a
+    # transient Redis hiccup logs and retries next cycle instead of killing
+    # this long-runing task for good.
+        
     while True:
         await asyncio.sleep(CLEANUP_CHECK_INTERVAL)
         try:
