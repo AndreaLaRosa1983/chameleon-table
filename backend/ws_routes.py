@@ -34,7 +34,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
         async with get_lock(room_code):
             state = await get_game(room_code)
             player = next((p for p in state.players if p.name == player_name), None)
-            if player:
+            if player and not player.left:
                 player.active = True
                 await set_game(room_code, state)
                 state = await advance_sequence(room_code)
@@ -45,7 +45,7 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, token: str):
     async with get_lock(room_code):
         state = await get_game(room_code)
         player = next((p for p in state.players if p.name == player_name), None)
-        if player and not player.active:
+        if player and not player.active and not player.left:
             player.active = True
             await set_game(room_code, state)
             state = await advance_sequence(room_code)

@@ -276,7 +276,7 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
         player = next(p for p in state.players if p.name == username)
         player.active = False
         player.left = True
-        active_players = sum(1 for p in state.players if p.active)
+        active_players = sum(1 for p in state.players if not p.left)
         if active_players < 2:
             state.phase = GamePhase.ABORTED
         await set_game(room_code, state)

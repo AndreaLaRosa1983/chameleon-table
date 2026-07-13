@@ -45,9 +45,11 @@ const useGameSocket = (roomCode) => {
       }
     }
 
-    // Level 2 fallback: the connection is alive (we got a regular pong),but its sequence_number is ahead of what we have locally, meaning a
-    // single broadcast was silently dropped for this client specifically.
-      async function resyncViaRest() {
+    // Level 2 fallback, and also our recovery path for a stale-snapshot
+    // regression (see onmessage below): a single REST call to the existing
+    // state endpoint re-establishes ground truth, whichever direction the
+    // local sequence_number was off in.
+    async function resyncViaRest() {
       try {
         const res = await fetch(`${API_URL}/rooms/${roomCode}/state`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -94,21 +96,40 @@ const useGameSocket = (roomCode) => {
         const data = JSON.parse(event.data)
 
         if (data.type === 'pong') {
-          // connection response: clear suspect timeout,
-          // seq number compare happen after this
+          // connection response: clear suspect timeout
           if (pongTimeoutRef.current) clearTimeout(pongTimeoutRef.current)
 
-          if (data.sequence_number > lastSeqRef.current) {
-            console.log('WS pong reports newer sequence_number, resyncing via REST:', data.sequence_number)
+          // Any mismatch - server ahead (a broadcast was silently dropped,
+          // the original level-2 case) or server behind (a rare but real
+          // case: the backend recovered a room from a stale Postgres
+          // snapshot after a Redis-only crash, so its sequence_number
+          // regressed below what we already applied) - means our local
+          // number can no longer be trusted either way. Resync via REST
+          // rather than trying to reason about which direction it's off.
+          if (data.sequence_number !== lastSeqRef.current) {
+            console.log('WS pong reports mismatched sequence_number, resyncing via REST:', data.sequence_number)
             resyncViaRest()
           }
           return
         }
 
-        if (data.sequence_number <= lastSeqRef.current) {
-          console.log('WS ignored stale message:', data.sequence_number)
+        if (data.sequence_number === lastSeqRef.current) {
+          console.log('WS ignored duplicate message:', data.sequence_number)
           return
         }
+
+        if (data.sequence_number < lastSeqRef.current) {
+          // A genuine regression, not a duplicate: on an already-open
+          // connection the sequence_number should never move backwards
+          // during normal operation. If it does, the server itself has
+          // gone "back in time" (stale-snapshot recovery) - our local
+          // state is no longer trustworthy as a reference point, so we
+          // resync instead of silently discarding this as stale.
+          console.log('WS detected sequence regression, resyncing via REST:', data.sequence_number)
+          resyncViaRest()
+          return
+        }
+
         lastSeqRef.current = data.sequence_number
         console.log('WS received:', data.current_turn, data.phase)
         setGameState(data)
