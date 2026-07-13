@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from backend.ws_manager import manager
-from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms
+from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms, hard_cleanup_room_memory
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -233,6 +233,7 @@ async def place(room_code: str, request: PlaceCardRequest, username: str = Depen
 async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: str = Depends(get_current_user)):
     if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
+    finished = False
     async with get_lock(room_code):
         state = await get_game(room_code)
         if state.phase != GamePhase.PLAYING:
@@ -261,14 +262,19 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: s
             except Exception as e:
                 print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
             await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-        return TakeRowResponse(
-            state=game_state_to_response(state)
-        )
+            if state.phase == GamePhase.FINISHED:
+                finished = True
+        response = TakeRowResponse(state=game_state_to_response(state))
+    # lock released: if the game finished, free its RAM
+    if finished:
+        hard_cleanup_room_memory(room_code)
+    return response
 
 @app.post("/rooms/{room_code}/leave", response_model=LeaveRoomResponse)
 async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depends(get_current_user)):
     if not await game_exists(room_code):
         raise HTTPException(status_code=404, detail="Room not found")
+    aborted = False
     async with get_lock(room_code):
         state = await get_game(room_code)
         if not any(p.name == username for p in state.players):
@@ -279,6 +285,7 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
         active_players = sum(1 for p in state.players if not p.left)
         if active_players < 2:
             state.phase = GamePhase.ABORTED
+            aborted = True
         await set_game(room_code, state)
         state = await advance_sequence(room_code)
         try:
@@ -286,9 +293,11 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
         except Exception as e:
             print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-        return LeaveRoomResponse(
-            state=game_state_to_response(state)
-        )
+        response = LeaveRoomResponse(state=game_state_to_response(state))
+    # lock released: if the room aborted, free its RAM
+    if aborted:
+        hard_cleanup_room_memory(room_code)
+    return response
 
 @app.get("/rooms", response_model=RoomsListResponse)
 async def get_rooms():
@@ -423,4 +432,6 @@ async def abort_game(room_code: str, username: str = Depends(get_current_user)):
         except Exception as e:
             print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-        return {"ok": True}
+    # lock released: free the aborted room's RAM
+    hard_cleanup_room_memory(room_code)
+    return {"ok": True}

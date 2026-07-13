@@ -25,6 +25,24 @@ def get_lock(room_code: str) -> Lock:
     return room_locks[room_code]
 
 
+def hard_cleanup_room_memory(room_code: str, exclude_current_task: bool = False):
+    # Event-driven RAM cleanup: call AFTER the room lock is released, once a
+    # room reaches a terminal state (ABORTED/FINISHED). Frees the room lock and
+    # cancels any lingering inactivity/disconnection tasks. Touches RAM only —
+    # never Redis/Postgres — so game data and /scores stay intact.
+    # exclude_current_task=True when called from inside one of those tasks, so
+    # it never cancels the task running it (self-cancel guard).
+    room_locks.pop(room_code, None)
+    prefix = f"{room_code}_"
+    current = asyncio.current_task() if exclude_current_task else None
+    for task_dict in (inactivity_tasks, disconnection_tasks):
+        for key in list(task_dict.keys()):
+            if key.startswith(prefix):
+                task = task_dict.pop(key, None)
+                if task and task is not current:
+                    task.cancel()
+
+
 async def _room_exists_with_retry(room_code: str) -> bool:
     # Retries the Redis check right after a background timer wakes up, sice
     # these tasks have no caller to report failures to (unlike the try/except
@@ -82,9 +100,17 @@ def game_state_to_response(state) -> GameStateResponse:
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
-    # finally always removes the key (leak-safe). The early pop before
-    # advance_sequence is intentional: it stops the task from cancelling itself
-    # via reset_inactivity_timer (see test_inactivity_full_cycle_does_not_self_cancel).
+    # try/finally guarantees this task's key is removed from inactivity_tasks
+    # on every exit path (normal end, early return, or external cancellation
+    # during the sleep), preventing orphan keys piling up (memory leak).
+    #
+    # NOTE: there is ALSO an early pop right before advance_sequence below.
+    # That is intentional and NOT redundant: advance_sequence calls
+    # reset_inactivity_timer for the current turn (which is this very player),
+    # and if our key were still present it would cancel this running task
+    # mid-execution, leaving the match stuck in "playing" (self-cancel bug,
+    # covered by test_inactivity_full_cycle_does_not_self_cancel). Popping
+    # early makes that lookup a harmless no-op; the finally covers the rest.
     try:
         await asyncio.sleep(INACTIVITY_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -141,7 +167,9 @@ async def advance_sequence(room_code: str):
     return state
 
 async def handle_disconnection(room_code: str, player_name: str):
-    # finally leak-safe as above; no self-cancel risk here.
+    # Same try/finally guarantee as handle_inactivity: the grace-period task
+    # may be cancelled mid-sleep (e.g. the player reconnects), so the key
+    # removal must live in finally to run in every exit path.
     try:
         await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -179,6 +207,7 @@ async def cleanup_stale_waiting_rooms():
         try:
             room_codes = await get_all_game_keys()
             for room_code in room_codes:
+                should_cleanup = False
                 async with get_lock(room_code):
                     state = await get_game(room_code)
                     if state is None:
@@ -191,5 +220,10 @@ async def cleanup_stale_waiting_rooms():
                     await set_game(room_code, state)
                     await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
                     print(f"[CLEANUP] Aborted stale waiting room {room_code}")
+                    should_cleanup = True
+                # lock for THIS room already released here; safe to free its RAM.
+                # exclude_curret_task=True: we run inside the sweep task itself.
+                if should_cleanup:
+                    hard_cleanup_room_memory(room_code, exclude_current_task=True)
         except Exception as e:
             print(f"[CLEANUP] Error during sweep, will retry next cycle: {e}")
