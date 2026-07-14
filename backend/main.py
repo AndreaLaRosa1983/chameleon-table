@@ -84,7 +84,7 @@ async def create_room(request: CreateRoomRequest, username: str = Depends(get_cu
     for code in room_codes:
         state = await get_game(code)
         if state and state.phase in [GamePhase.WAITING, GamePhase.PLAYING]:
-            if any(p.name == username for p in state.players):
+            if any(p.name == username and not p.left for p in state.players):
                 raise HTTPException(status_code=400, detail="You are already in a game")
 
     room_code = generate_room_code()
@@ -114,7 +114,7 @@ async def join_room(room_code: str, request: JoinRoomRequest, username: str = De
             continue
         state = await get_game(code)
         if state and state.phase in [GamePhase.WAITING, GamePhase.PLAYING]:
-            if any(p.name == username for p in state.players):
+            if any(p.name == username and not p.left for p in state.players):
                 raise HTTPException(status_code=400, detail="You are already in a game")
 
     async with get_lock(room_code):
