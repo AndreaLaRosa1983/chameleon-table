@@ -76,12 +76,12 @@ export default function Results() {
   const players = state.players
   console.log('players jokers:', players.map(p => ({name: p.name, jokers: p.jokers})))
   useEffect(() => {
-    if (phase === 'finished' && roomCode) {
+    if (gameState && phase === 'finished' && roomCode) {
       getScores(roomCode)
         .then(setScores)
         .catch(e => console.error('Error fetching scores:', e))
     }
-  }, [phase, roomCode])
+  }, [gameState, phase, roomCode])
 
   const ranked = scores
     ? [...players]
