@@ -4,6 +4,7 @@ from backend.game import current_turn as compute_current_turn, end_round
 from backend.redis_store import game_exists, get_all_game_keys, get_game, set_game
 from asyncio import Lock, Task
 import asyncio
+import os
 from backend.ws_manager import manager
 import time   
 
@@ -16,8 +17,8 @@ INACTIVITY_TIMEOUT = 60       #lower this for a fastest play or improve for a lo
 GRACE_PERIOD_TIMEOUT = 120    # reconnection grace period after going inactive/disconnecting
 WAITING_ROOM_TIMEOUT = 600    # abort a WATING room nobody started/cancelled within this long
 CLEANUP_CHECK_INTERVAL = 60   #how often the background sweep below checks for stale rooms
-REDIS_RETRY_ATTEMPTS = 3      # retries for the Redis check right after a background timer wakes up
 REDIS_RETRY_DELAY = 2         # seconds between those retries
+REDIS_HEALTHCHECK_INTERVAL = float(os.getenv("REDIS_HEALTHCHECK_INTERVAL", "5"))  # how often we ping Redis to detect a restart
 
 def get_lock(room_code: str) -> Lock:
     if room_code not in room_locks:
@@ -44,21 +45,13 @@ def hard_cleanup_room_memory(room_code: str, exclude_current_task: bool = False)
 
 
 async def _room_exists_with_retry(room_code: str) -> bool:
-    # Retries the Redis check right after a background timer wakes up, sice
-    # these tasks have no caller to report failures to (unlike the try/except
-    # already used for Postgres writes elsewhere). Absorbs a brief Redis blip
-    # at exactly this moment; narrows but doesn't eliminate the risk window,
-    # since a longer outage still causes the task to give up.
-    
-    for attempt in range(REDIS_RETRY_ATTEMPTS):
+    # Retries indefinitely until Redis answers 
+    while True:
         try:
             return await game_exists(room_code)
         except Exception as e:
-            print(f"[TIMER] Redis unreachable checking {room_code} (attempt {attempt + 1}/{REDIS_RETRY_ATTEMPTS}): {e}")
-            if attempt < REDIS_RETRY_ATTEMPTS - 1:
-                await asyncio.sleep(REDIS_RETRY_DELAY)
-    print(f"[TIMER] Giving up on {room_code} after {REDIS_RETRY_ATTEMPTS} attempts, Redis still unreachable")
-    return False
+            print(f"[TIMER] Redis unreachable checking {room_code}, retrying: {e}")
+            await asyncio.sleep(REDIS_RETRY_DELAY)
 
 def game_state_to_response(state) -> GameStateResponse:
     return GameStateResponse(
@@ -100,17 +93,9 @@ def game_state_to_response(state) -> GameStateResponse:
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
-    # try/finally guarantees this task's key is removed from inactivity_tasks
-    # on every exit path (normal end, early return, or external cancellation
-    # during the sleep), preventing orphan keys piling up (memory leak).
-    #
-    # NOTE: there is ALSO an early pop right before advance_sequence below.
-    # That is intentional and NOT redundant: advance_sequence calls
-    # reset_inactivity_timer for the current turn (which is this very player),
-    # and if our key were still present it would cancel this running task
-    # mid-execution, leaving the match stuck in "playing" (self-cancel bug,
-    # covered by test_inactivity_full_cycle_does_not_self_cancel). Popping
-    # early makes that lookup a harmless no-op; the finally covers the rest.
+    # finally always removes the key (leak-safe). The early pop before
+    # advance_sequence is intentional: it stops the task from cancelling itself
+    # via reset_inactivity_timer (see test_inactivity_full_cycle_does_not_self_cancel).
     try:
         await asyncio.sleep(INACTIVITY_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -167,9 +152,7 @@ async def advance_sequence(room_code: str):
     return state
 
 async def handle_disconnection(room_code: str, player_name: str):
-    # Same try/finally guarantee as handle_inactivity: the grace-period task
-    # may be cancelled mid-sleep (e.g. the player reconnects), so the key
-    # removal must live in finally to run in every exit path.
+    # finally leak-safe as above; no self-cancel risk here.
     try:
         await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -221,9 +204,36 @@ async def cleanup_stale_waiting_rooms():
                     await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
                     print(f"[CLEANUP] Aborted stale waiting room {room_code}")
                     should_cleanup = True
-                # lock for THIS room already released here; safe to free its RAM.
-                # exclude_curret_task=True: we run inside the sweep task itself.
+                # lock released here; safe to free RAM. exclude_current_task=True: we run inside the sweep task.
                 if should_cleanup:
                     hard_cleanup_room_memory(room_code, exclude_current_task=True)
         except Exception as e:
             print(f"[CLEANUP] Error during sweep, will retry next cycle: {e}")
+
+
+async def reload_playing_games_from_postgres():
+    # On Redis return: restore playing games from Postgres over any stale
+    # snapshot. Pure restore — no inactive marking, no seq bump.
+    from backend.database import load_active_games
+    games = await load_active_games()
+    for state in games:
+        await set_game(state.room_code, state)
+        print(f"[RECOVERY] Reloaded room {state.room_code} from Postgres")
+
+
+async def redis_recovery_watcher():
+    # Pings Redis every interval; on the down->up edge, reloads playing games
+    # from Postgres so a stale RDB snapshot can't mask fresher Postgres state.
+    from backend.redis_store import get_redis_client
+    redis_was_down = False
+    while True:
+        await asyncio.sleep(REDIS_HEALTHCHECK_INTERVAL)
+        try:
+            client = await get_redis_client()
+            await client.ping()
+            if redis_was_down:
+                print("[RECOVERY] Redis back, reloading from Postgres")
+                await reload_playing_games_from_postgres()
+                redis_was_down = False
+        except Exception:
+            redis_was_down = True

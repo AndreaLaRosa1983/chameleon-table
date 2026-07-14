@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from backend.ws_manager import manager
-from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms, hard_cleanup_room_memory
+from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms, hard_cleanup_room_memory, redis_recovery_watcher
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -52,9 +52,11 @@ async def lifespan(app: FastAPI):
                 disconnection_tasks[f"{state.room_code}_{player.name}"] = task
 
     cleanup_task = create_task(cleanup_stale_waiting_rooms())
+    recovery_task = create_task(redis_recovery_watcher())
     yield
 
     cleanup_task.cancel()
+    recovery_task.cancel()
     await close_redis()
 
 app = FastAPI(lifespan=lifespan)

@@ -6,9 +6,10 @@
 import uuid
 import pytest
 
-from backend.redis_store import delete_game, game_exists
-from tests.conftest import setup_game, auth
-
+from backend.redis_store import delete_game, game_exists, get_game, set_game
+from tests.conftest import make_game_state_for_draw_card, setup_game, auth
+from backend.database import save_game
+from backend.state import reload_playing_games_from_postgres
 RUN_ID = uuid.uuid4().hex[:8]
 
 
@@ -25,13 +26,6 @@ async def test_redis_repairs_room_from_postgres_after_data_loss(async_client):
     # a completed RDB save).
     await delete_game(room_code)
 
-    # NOTE: we can't assert game_exists(room_code) is False here. Checking
-    # existence is itself what triggers the cache-aside repair, so the very
-    # act of observing "is it gone?" immediately heals it. That's the
-    # mechanism working as designed, not a gap in the test.
-
-    # Backend never restarted — the only way this room comes back is via
-    # the cache-aside repair on the next access.
     res = await async_client.get(f"/rooms/{room_code}/state")
     assert res.status_code == 200, "expected the room to be repaired from Postgres, not 404"
 
@@ -51,3 +45,26 @@ async def test_redis_repairs_room_from_postgres_after_data_loss(async_client):
         f"/rooms/{room_code}/draw", json={}, headers=auth(tokens[current_turn])
     )
     assert res.status_code == 200
+    
+    
+@pytest.mark.asyncio
+async def test_reload_playing_games_from_postgres_overwrites_stale_redis():
+    room_code = "RECOVR"
+
+    # Stale state in Redis: simulates old RDB sapshot after Redis restart
+    stale_state = make_game_state_for_draw_card()
+    stale_state.room_code = room_code
+    stale_state.round_starter = "Bob"
+    await set_game(room_code, stale_state)
+
+    # Fresh state in Postgres: what should win after recovery
+    fresh_state = make_game_state_for_draw_card()
+    fresh_state.room_code = room_code
+    fresh_state.round_starter = "Charlie"
+    await save_game(room_code, fresh_state)
+
+    await reload_playing_games_from_postgres()
+
+    result = await get_game(room_code)
+    assert result is not None
+    assert result.round_starter == "Charlie"
