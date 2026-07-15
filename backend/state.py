@@ -26,6 +26,18 @@ def get_lock(room_code: str) -> Lock:
     return room_locks[room_code]
 
 
+def reactivate_if_needed(state, player_name: str):
+    # Reactivates a player who just acted via REST and cancels their pending
+    # expulsion task — an orpha task would fire at its ORIGINAL deadline
+    # during a later inactivity cycle, expelling the player early.
+    player = next((p for p in state.players if p.name == player_name), None)
+    if player and not player.active and not player.left:
+        player.active = True
+        task = disconnection_tasks.pop(f"{state.room_code}_{player_name}", None)
+        if task:
+            task.cancel()
+
+
 def hard_cleanup_room_memory(room_code: str, exclude_current_task: bool = False):
     # Event-driven RAM cleanup: call AFTER the room lock is released, once a
     # room reaches a terminal state (ABORTED/FINISHED). Frees the room lock and
@@ -222,7 +234,7 @@ async def reload_playing_games_from_postgres():
 
 
 async def redis_recovery_watcher():
-    # Pings Redis every interval; on the down->up edge, reloads playing games
+    # Pings Redis every iterval; on the down->up edge, reloads playing games
     # from Postgres so a stale RDB snapshot can't mask fresher Postgres state.
     from backend.redis_store import get_redis_client
     redis_was_down = False

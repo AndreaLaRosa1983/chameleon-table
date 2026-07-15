@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from backend.ws_manager import manager
-from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms, hard_cleanup_room_memory, redis_recovery_watcher
+from backend.state import game_state_to_response, advance_sequence, get_lock, handle_disconnection, disconnection_tasks, reset_inactivity_timer, cleanup_stale_waiting_rooms, hard_cleanup_room_memory, redis_recovery_watcher, reactivate_if_needed
 from backend.schemas import (
     CreateRoomRequest, CreateRoomResponse,
     JoinRoomRequest, JoinRoomResponse,
@@ -179,6 +179,7 @@ async def draw(room_code: str, request: DrawCardRequest, username: str = Depends
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         state = await get_game(room_code)
+        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):
@@ -208,6 +209,7 @@ async def place(room_code: str, request: PlaceCardRequest, username: str = Depen
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         state = await get_game(room_code)
+        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):
@@ -238,6 +240,7 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: s
     finished = False
     async with get_lock(room_code):
         state = await get_game(room_code)
+        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):

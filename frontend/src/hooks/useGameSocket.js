@@ -72,8 +72,12 @@ const useGameSocket = (roomCode) => {
 
       const ws = new WebSocket(`${WS_URL}/ws/${roomCode}?token=${encodeURIComponent(token)}`)
       wsRef.current = ws
-
       ws.onopen = () => {
+        if (reconnectTimerRef.current) {
+          console.log('[FIX ACTIVE] clearing stale reconnect timer (onopen)')
+          clearTimeout(reconnectTimerRef.current)
+          reconnectTimerRef.current = null
+        }
         reconnectAttemptRef.current = 0
         setConnectionStatus('connected')
 
@@ -144,6 +148,12 @@ const useGameSocket = (roomCode) => {
         stopHeartbeat()
 
         if (!shouldReconnectRef.current) return
+
+        if (reconnectTimerRef.current) {
+            console.log('[FIX ACTIVE] clearing stale reconnect timer (onclose)')
+            clearTimeout(reconnectTimerRef.current)
+            reconnectTimerRef.current = null
+          }
 
         setConnectionStatus('reconnecting')
         const delayIndex = Math.min(reconnectAttemptRef.current, RECONNECT_DELAYS.length - 1)

@@ -182,3 +182,42 @@ async def test_cascading_timeouts_three_players(async_client, fast_timeout):
 
     first_player = next(p for p in state["players"] if p["name"] == first_turn_player)
     assert first_player["active"] is False, "the first player to time out should be inactive"
+    
+@pytest.mark.asyncio
+async def test_rest_action_during_grace_period_reactivates_player(async_client, monkeypatch):
+    # Regression test: handle_inactivity sets active=False without closing the
+    # WS, so the WS-reconect reset never fires — before the fix a player kept
+    # playing via REST but stayed "inactive" and got expelled at grace expiry.
+    # Asymmetric timeouts: 3s grace leaves a non-flaky window to act during it.
+    monkeypatch.setattr(state_module, "INACTIVITY_TIMEOUT", 1)
+    monkeypatch.setattr(state_module, "GRACE_PERIOD_TIMEOUT", 3)
+
+    room_code, tokens = await setup_game(
+        async_client, players=[f"TimingAlice7_{RUN_ID}", f"TimingBob7_{RUN_ID}"], max_players=2
+    )
+
+    res = await async_client.get(f"/rooms/{room_code}/state")
+    current_turn = res.json()["state"]["current_turn"]
+
+    await asyncio.sleep(1.8) 
+
+    res = await async_client.get(f"/rooms/{room_code}/state")
+    state = res.json()["state"]
+    player = next(p for p in state["players"] if p["name"] == current_turn)
+    assert player["active"] is False
+    assert state["phase"] == "playing"
+
+    res = await async_client.post(
+        f"/rooms/{room_code}/draw", json={}, headers=auth(tokens[current_turn])
+    )
+    assert res.status_code == 200
+    
+    res = await async_client.get(f"/rooms/{room_code}/state")
+    player = next(p for p in res.json()["state"]["players"] if p["name"] == current_turn)
+    assert player["active"] is True
+
+    await asyncio.sleep(2.7) 
+
+    res = await async_client.get(f"/rooms/{room_code}/state")
+    state = res.json()["state"]
+    assert state["phase"] == "playing", "player was expelled despite acting during the grace period"
