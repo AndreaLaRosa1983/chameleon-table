@@ -103,11 +103,11 @@ function ColorChip({ color, count, size = 'sm' }) {
   )
 }
 
-function Plus2Chip({ count, isMe, size = 'sm' }) {
+function Plus2Chip({ count, size = 'sm' }) {
   return (
     <div className={s.colorChip}>
       <img src="/assets/cotton.png" alt="+2" className={`${s.cardImg} ${s[size]}`} />
-      <span className={s.chipCount}>{isMe ? count : '?'}</span>
+      <span className={s.chipCount}>{count} (+{count * 2})</span>
     </div>
   )
 }
@@ -130,7 +130,7 @@ function PlayerCards({ cards, jokers = [], isMe, size = 'sm' }) {
       {Object.entries(colorCounts).map(([color, count]) => (
         <ColorChip key={color} color={color} count={count} size={size} />
       ))}
-      {plus2 && <Plus2Chip count={plus2Count} isMe={isMe} size={size} />}
+      {plus2 && <Plus2Chip count={plus2Count} size={size} />}
       {jokers.length > 0 && <JokerChip count={jokers.length} size={size} />}
     </div>
   )
