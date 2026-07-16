@@ -1,9 +1,8 @@
-#Seed script: creates test users in the database.
-#Run this after starting the application with docker compose up -d.
-
-#Usage:
-# python scripts/seed_db.py
-
+'''Seed script: creates test users in the database.
+Run this after starting the application with docker compose up -d.
+Usage:
+python scripts/seed_db_nodeps.py
+'''
 import sys
 import json
 import urllib.request
@@ -54,16 +53,19 @@ def seed():
                 print(f"  [OK] {p['username']} created")
             elif status == 400:
                 print(f"  [SKIP] {p['username']} already exists")
+            elif status == 403:
+                print(f"  [ERROR] {p['username']}: registration is disabled (REGISTRATION_ENABLED)")
+                errors += 1
             else:
                 print(f"  [ERROR] {p['username']}: {status} {text}")
                 errors += 1
         except urllib.error.URLError:
-            print(f"  [ERROR] Cannot conect to {BASE_URL}. Is the application running?")
+            print(f"  [ERROR] Cannot connect to {BASE_URL}. Is the application running?")
             sys.exit(1)
 
     print()
     if errors == 0:
-        print("Seed complete.All players are ready.")
+        print("Seed complete. All players are ready.")
         print()
         print("Credentials:")
         for p in PLAYERS:
