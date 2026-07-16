@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import useGameStore from '../store/useGameStore'
 import { COLOR_ASSETS, CARD_TYPE_ASSETS } from '../constants'
-import { MOCK_FINISHED_STATE } from '../mocks/mockData'
 import { getScores } from '../api/api'
 import s from './Results.module.scss'
 
@@ -71,10 +70,14 @@ export default function Results() {
   const { gameState, clearSession } = useGameStore()
   const [scores, setScores] = useState(null)
 
-  const state = gameState ?? MOCK_FINISHED_STATE
-  const phase = state.phase
-  const players = state.players
-  console.log('players jokers:', players.map(p => ({name: p.name, jokers: p.jokers})))
+  const phase = gameState?.phase
+
+  // No in-memory state (e.g. the page was reloaded): nothing to show, so
+  // send the user back to the lobby instead of hanging on a loader.
+  useEffect(() => {
+    if (!gameState) navigate('/')
+  }, [gameState])
+
   useEffect(() => {
     if (gameState && phase === 'finished' && roomCode) {
       getScores(roomCode)
@@ -83,16 +86,20 @@ export default function Results() {
     }
   }, [gameState, phase, roomCode])
 
-  const ranked = scores
-    ? [...players]
-        .filter(p => !p.left)
-        .sort((a, b) => (scores[b.name] ?? 0) - (scores[a.name] ?? 0))
-    : []
-
   function handleHome() {
     clearSession()
     navigate('/')
   }
+
+  if (!gameState || !gameState.players) {
+    return <div className={s.loading}>Loading…</div>
+  }
+
+  const ranked = scores
+    ? [...gameState.players]
+        .filter(p => !p.left)
+        .sort((a, b) => (scores[b.name] ?? 0) - (scores[a.name] ?? 0))
+    : []
 
   return (
     <div className={s.page}>
