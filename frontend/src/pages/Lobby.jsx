@@ -88,7 +88,10 @@ function Lobby() {
     <div className={s.page}>
 
       <div className={s.logo}>
-        <div className={s.logoTitle}>🦎 Chameleon Table</div>
+        <div className={s.logoTitle}>
+          <img src="/assets/chameleon-logo.svg" alt="" className={s.logoIcon} />
+        Chameleon Table
+      </div>
         <div className={s.logoSub}>online card game</div>
       </div>
 
