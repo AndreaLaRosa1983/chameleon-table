@@ -5,10 +5,9 @@ import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
 import { drawCard, placeCard, takeRow, leaveRoom } from '../api/api'
 import { COLOR_ASSETS, CARD_TYPE_ASSETS, CARD_LG_H } from '../constants'
-import { MY_NAME, MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
 
-const TURN_TIMEOUT_FALLBACK = 120
+const TURN_TIMEOUT_FALLBACK = 60
 const GRACE_TIMEOUT_FALLBACK = 120
 
 // Row-capacity corner icons. The "special" two-player layout has three rows
@@ -265,32 +264,25 @@ function LeaveModal({ onConfirm, onCancel }) {
 }
 
 export default function Game() {
-  const { roomCode, gameState: liveState, clearSession } = useGameStore()
-  const { username } = useAuthStore()
+  const { roomCode, gameState, clearSession } = useGameStore()
+  const { username: myName } = useAuthStore()
   const [confirmRow, setConfirmRow] = useState(null)
   const [showLeave, setShowLeave] = useState(false)
   const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT_FALLBACK)
   const navigate = useNavigate()
 
-  const gameState = liveState ?? MOCK_STATE
-  const myName = username ?? MY_NAME
-
   // The player currently holding the turn, per turn_order/current_turn. If
   // they're active=false but still present (not yet left), the turn is
   // frozen on them per the grace-period rule - this is what we key the
   // grace-period countdown/badges off of.
-  const currentPlayerObj = gameState.players?.find(p => p.name === gameState.current_turn)
+  const currentPlayerObj = gameState?.players?.find(p => p.name === gameState.current_turn)
   const isGracePeriod = !!(currentPlayerObj && !currentPlayerObj.active)
 
   const totalTime = isGracePeriod
-    ? (gameState.grace_period_timeout ?? GRACE_TIMEOUT_FALLBACK)
-    : (gameState.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK)
+    ? (gameState?.grace_period_timeout ?? GRACE_TIMEOUT_FALLBACK)
+    : (gameState?.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK)
 
   useGameSocket(roomCode)
-
-  if (!gameState || !gameState.players || gameState.players.length === 0) {
-    return <div className={s.loading}>Loading...</div>
-  }
 
   useEffect(() => {
     if (gameState?.phase === 'finished' || gameState?.phase === 'aborted') {
@@ -299,7 +291,7 @@ export default function Game() {
   }, [gameState?.phase])
 
   useEffect(() => {
-    const startedAt = gameState.turn_started_at
+    const startedAt = gameState?.turn_started_at
 
     function computeTimeLeft() {
       if (!startedAt) return totalTime
@@ -312,7 +304,13 @@ export default function Game() {
       setTimeLeft(computeTimeLeft())
     }, 1000)
     return () => clearInterval(interval)
-  }, [gameState.current_turn, gameState.turn_started_at, totalTime])
+  }, [gameState?.current_turn, gameState?.turn_started_at, totalTime])
+
+  // Every hook above this line: early returns must stay below them, or the
+  // hook call order changes between renders and React throws.
+  if (!gameState || !gameState.players || gameState.players.length === 0) {
+    return <div className={s.loading}>Loading…</div>
+  }
 
   const me = gameState.players.find(p => p.name === myName)
 
