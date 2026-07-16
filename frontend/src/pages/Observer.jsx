@@ -1,9 +1,8 @@
+import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { COLOR_ASSETS, CARD_TYPE_ASSETS, CARD_LG_H } from '../constants'
-import { MOCK_STATE } from '../mocks/mockData'
 import s from './Game.module.scss'
 import useGameStore from '../store/useGameStore'
-import useAuthStore from '../store/useAuthStore'
 import useGameSocket from '../hooks/useGameSocket'
 import { leaveObserve } from '../api/api.js'
 
@@ -120,12 +119,17 @@ function DeckPanel({ count, lastRound }) {
 export default function Observer() {
   const { roomCode } = useParams()
   const navigate = useNavigate()
-  const { gameState: liveState } = useGameStore()
-  const { username } = useAuthStore()
-
-  const gameState = liveState ?? MOCK_STATE
+  const { gameState } = useGameStore()
 
   useGameSocket(roomCode)
+
+  // Observers follow the same end-of-game routing as players, otherwise they
+  // stay stuck on the table after the match is over.
+  useEffect(() => {
+    if (gameState?.phase === 'finished' || gameState?.phase === 'aborted') {
+      navigate(`/results/${roomCode}`)
+    }
+  }, [gameState?.phase])
 
   async function handleLeave() {
     try {
@@ -134,6 +138,10 @@ export default function Observer() {
       console.error(e)
     }
     navigate('/')
+  }
+
+  if (!gameState || !gameState.players || gameState.players.length === 0) {
+    return <div className={s.loading}>Loading…</div>
   }
 
   const players = gameState.players
