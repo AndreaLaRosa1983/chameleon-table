@@ -22,7 +22,7 @@ def create_access_token(username: str) -> str:
     return jwt.encode({"sub": username, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token_raw(token: str) -> str | None:
-    """Decodes the token and returns the username, or None if invalid. No HTTP exceptions raised."""
+    #Decodes the token and returns the username, or None if invalid. No HTTP exceptions raised.
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("sub")
@@ -30,7 +30,7 @@ def decode_token_raw(token: str) -> str | None:
         return None
 
 def decode_token(token: str) -> str:
-    """Decodes the token for REST endpoints, raising HTTPException on failure."""
+    #Decodes the token for REST endpoints, raising HTTPException on failure.
     username = decode_token_raw(token)
     if username is None:
         raise HTTPException(status_code=401, detail="Invalid token")

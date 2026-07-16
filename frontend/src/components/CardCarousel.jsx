@@ -14,7 +14,8 @@ const CARD_IMAGES = [
 function CardCarousel() {
   const count = CARD_IMAGES.length
   const angleStep = 360 / count
-
+  // NB!!! Radius tuned for 8 cards at current width — cards overlap if count grows.
+  const RADIUS = 280
   return (
     <div className={s.carouselWrapper}>
       <div className={s.scene}>
@@ -24,7 +25,7 @@ function CardCarousel() {
               key={src}
               className={s.cardSlot}
               style={{
-                transform: `rotateY(${angleStep * i}deg) translateZ(280px)`,
+                transform: `rotateY(${angleStep * i}deg) translateZ(${RADIUS}px)`,
               }}
             >
               <img src={src} alt="" className={s.cardImg} />

@@ -13,9 +13,9 @@ disconnection_tasks: dict[str, Task] = {}
 inactivity_tasks: dict[str, Task] = {}  
 
 
-INACTIVITY_TIMEOUT = 60       #lower this for a fastest play or improve for a longest play
+INACTIVITY_TIMEOUT = 60       # lower for faster turns, raise for slower ones
 GRACE_PERIOD_TIMEOUT = 120    # reconnection grace period after going inactive/disconnecting
-WAITING_ROOM_TIMEOUT = 600    # abort a WATING room nobody started/cancelled within this long
+WAITING_ROOM_TIMEOUT = 600    # abort a WAITING room nobody started/cancelled within this long
 CLEANUP_CHECK_INTERVAL = 60   #how often the background sweep below checks for stale rooms
 REDIS_RETRY_DELAY = 2         # seconds between those retries
 REDIS_HEALTHCHECK_INTERVAL = float(os.getenv("REDIS_HEALTHCHECK_INTERVAL", "5"))  # how often we ping Redis to detect a restart
@@ -27,9 +27,9 @@ def get_lock(room_code: str) -> Lock:
 
 
 def reactivate_if_needed(state, player_name: str):
-    # Reactivates a player who just acted via REST and cancels their pending
-    # expulsion task — an orpha task would fire at its ORIGINAL deadline
-    # during a later inactivity cycle, expelling the player early.
+    """ Reactivates a player who just acted via REST and cancels their pending
+    expulsion task — an orphan task would fire at its ORIGINAL deadline
+    during a later inactivity cycle, expelling the player early. """
     player = next((p for p in state.players if p.name == player_name), None)
     if player and not player.active and not player.left:
         player.active = True
@@ -39,12 +39,12 @@ def reactivate_if_needed(state, player_name: str):
 
 
 def hard_cleanup_room_memory(room_code: str, exclude_current_task: bool = False):
-    # Event-driven RAM cleanup: call AFTER the room lock is released, once a
-    # room reaches a terminal state (ABORTED/FINISHED). Frees the room lock and
-    # cancels any lingering inactivity/disconnection tasks. Touches RAM only —
-    # never Redis/Postgres — so game data and /scores stay intact.
-    # exclude_current_task=True when called from inside one of those tasks, so
-    # it never cancels the task running it (self-cancel guard).
+    """ Event-driven RAM cleanup: call AFTER the room lock is released, once a
+    room reaches a terminal state (ABORTED/FINISHED). Frees the room lock and
+    cancels any lingering inactivity/disconnection tasks. Touches RAM only —
+    never Redis/Postgres — so game data and /scores stay intact.
+    exclude_current_task=True when called from inside one of those tasks, so
+    it never cancels the task running it (self-cancel guard). """
     room_locks.pop(room_code, None)
     prefix = f"{room_code}_"
     current = asyncio.current_task() if exclude_current_task else None
@@ -57,7 +57,7 @@ def hard_cleanup_room_memory(room_code: str, exclude_current_task: bool = False)
 
 
 async def _room_exists_with_retry(room_code: str) -> bool:
-    # Retries indefinitely until Redis answers 
+    """ Retries indefinitely until Redis answers """
     while True:
         try:
             return await game_exists(room_code)
@@ -66,6 +66,7 @@ async def _room_exists_with_retry(room_code: str) -> bool:
             await asyncio.sleep(REDIS_RETRY_DELAY)
 
 def game_state_to_response(state) -> GameStateResponse:
+    """Project the internal GameState into the wire-format response sent to clients."""
     return GameStateResponse(
         room_code=state.room_code,
         rows=[
@@ -105,9 +106,9 @@ def game_state_to_response(state) -> GameStateResponse:
     )
 
 async def handle_inactivity(room_code: str, player_name: str):
-    # finally always removes the key (leak-safe). The early pop before
-    # advance_sequence is intentional: it stops the task from cancelling itself
-    # via reset_inactivity_timer (see test_inactivity_full_cycle_does_not_self_cancel).
+    """ finally always removes the key (leak-safe). The early pop before
+     advance_sequence is intentional: it stops the task from cancelling itself
+     via reset_inactivity_timer (see test_inactivity_full_cycle_does_not_self_cancel). """
     try:
         await asyncio.sleep(INACTIVITY_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -164,7 +165,7 @@ async def advance_sequence(room_code: str):
     return state
 
 async def handle_disconnection(room_code: str, player_name: str):
-    # finally leak-safe as above; no self-cancel risk here.
+    """ finally leak-safe as above; no self-cancel risk here. """
     try:
         await asyncio.sleep(GRACE_PERIOD_TIMEOUT)
         if not await _room_exists_with_retry(room_code):
@@ -191,11 +192,11 @@ async def handle_disconnection(room_code: str, player_name: str):
 
 
 async def cleanup_stale_waiting_rooms():
-    # Background sweep started once from lifespan(). Every
-    # CLEANUP_CHECK_INTERVAL seconds, aborts any room still in WAITING more
-    # than WAITING_ROOM_TIMEOUT since creation. Wrapped in try/except so a
-    # transient Redis hiccup logs and retries next cycle instead of killing
-    # this long-runing task for good.
+    """ Background sweep started once from lifespan(). Every
+     CLEANUP_CHECK_INTERVAL seconds, aborts any room still in WAITING more
+     than WAITING_ROOM_TIMEOUT since creation. Wrapped in try/except so a
+     transient Redis hiccup logs and retries next cycle instead of killing
+     this long-running task for good.  """
         
     while True:
         await asyncio.sleep(CLEANUP_CHECK_INTERVAL)
@@ -224,8 +225,8 @@ async def cleanup_stale_waiting_rooms():
 
 
 async def reload_playing_games_from_postgres():
-    # On Redis return: restore playing games from Postgres over any stale
-    # snapshot. Pure restore — no inactive marking, no seq bump.
+    """ On Redis return: restore playing games from Postgres over any stale
+     snapshot. Pure restore — no inactive marking, no seq bump. """
     from backend.database import load_active_games
     games = await load_active_games()
     for state in games:
@@ -234,8 +235,8 @@ async def reload_playing_games_from_postgres():
 
 
 async def redis_recovery_watcher():
-    # Pings Redis every iterval; on the down->up edge, reloads playing games
-    # from Postgres so a stale RDB snapshot can't mask fresher Postgres state.
+    """ Pings Redis every interval; on the down->up edge, reloads playing games
+    from Postgres so a stale RDB snapshot can't mask fresher Postgres state. """
     from backend.redis_store import get_redis_client
     redis_was_down = False
     while True:

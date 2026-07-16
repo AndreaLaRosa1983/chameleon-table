@@ -1,3 +1,6 @@
+$card-width: 140px;
+$card-height: 196px;
+
 .carouselWrapper {
   position: absolute;
   inset: 0;
@@ -22,8 +25,8 @@
 
 .carousel {
   position: relative;
-  width: 140px;
-  height: 196px;
+  width: $card-width;
+  height: $card-height;
   transform-style: preserve-3d;
   animation: rotateCarousel 36s linear infinite;
 }
@@ -36,8 +39,8 @@
 }
 
 .cardImg {
-  width: 140px;
-  height: 196px;
+  width: $card-width;
+  height: $card-height;
   object-fit: contain;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);

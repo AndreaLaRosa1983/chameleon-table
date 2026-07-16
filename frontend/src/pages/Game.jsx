@@ -282,13 +282,6 @@ export default function Game() {
   const currentPlayerObj = gameState.players?.find(p => p.name === gameState.current_turn)
   const isGracePeriod = !!(currentPlayerObj && !currentPlayerObj.active)
 
-  console.log('[DEBUG grace]', {
-    current_turn: gameState.current_turn,
-    currentPlayerObj,
-    isGracePeriod
-  })
-
-
   const totalTime = isGracePeriod
     ? (gameState.grace_period_timeout ?? GRACE_TIMEOUT_FALLBACK)
     : (gameState.inactivity_timeout ?? TURN_TIMEOUT_FALLBACK)

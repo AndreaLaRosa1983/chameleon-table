@@ -1,3 +1,5 @@
+// Static fixtures for developing the UI without a running backend.
+// Not imported by production code.
 
 export const MY_NAME = 'Bob'
 
@@ -26,11 +28,11 @@ export const MOCK_STATE = {
 export const MOCK_FINISHED_STATE = {
   phase: 'finished',
   players: [
-    { name: 'Alice',   cards: [{ card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'plus2' }, { card_type: 'plus2' }], left: false },
-    { name: 'Bob',     cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'orange' }, { card_type: 'color', color: 'orange' }], left: false },
-    { name: 'Charles', cards: [{ card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'blue' }, { card_type: 'color', color: 'blue' }], left: false },
-    { name: 'David',   cards: [{ card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'orange' }], left: false },
-    { name: 'Eve',     cards: [{ card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'red' }], left: false },
+    { name: 'Alice',   cards: [{ card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'yellow' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'plus2', color: null }, { card_type: 'plus2', color: null }], jokers: [], passed: true, active: true },
+    { name: 'Bob',     cards: [{ card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'green' }, { card_type: 'color', color: 'orange' }, { card_type: 'color', color: 'orange' }], jokers: [], passed: true, active: true },
+    { name: 'Charles', cards: [{ card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'red' }, { card_type: 'color', color: 'blue' }, { card_type: 'color', color: 'blue' }], jokers: [], passed: true, active: true },
+    { name: 'David',   cards: [{ card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'purple' }, { card_type: 'color', color: 'orange' }], jokers: [], passed: true, active: true },
+    { name: 'Eve',     cards: [{ card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'brown' }, { card_type: 'color', color: 'red' }], jokers: [], passed: true, active: true },
   ],
 }
 
@@ -38,7 +40,6 @@ export const MOCK_ABORTED_STATE = {
   phase: 'aborted',
   players: [],
 }
-
 
 export const MOCK_SCORES = {
   Alice:   28,

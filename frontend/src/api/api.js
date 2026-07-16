@@ -10,13 +10,18 @@ function authHeaders() {
   }
 }
 
-// For invalid token after docker rebuild, on 401, the client's auth state is cleared and the user
-// is sent back to the login page instead of silently failing or leaving a broken game state on screen.
+/**
+ * Centralized fetch wrapper: on 401 (expired or invalidated token) clears auth
+ * state and redirects to login, instead of failing silently or leaving a broken
+ * game on screen.
+ */
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options)
 
   if (res.status === 401) {
     useAuthStore.getState().clearAuth()
+    // Full reload rather than router navigation: guarantees no stale in-memory
+    // state survives an expired session. 
     window.location.href = '/login'
     throw new Error('Session expired, please log in again')
   }

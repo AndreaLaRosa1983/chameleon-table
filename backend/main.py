@@ -179,7 +179,7 @@ async def draw(room_code: str, request: DrawCardRequest, username: str = Depends
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         state = await get_game(room_code)
-        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
+        reactivate_if_needed(state, username) 
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):
@@ -209,7 +209,7 @@ async def place(room_code: str, request: PlaceCardRequest, username: str = Depen
         raise HTTPException(status_code=404, detail="Room not found")
     async with get_lock(room_code):
         state = await get_game(room_code)
-        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
+        reactivate_if_needed(state, username) 
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):
@@ -240,7 +240,7 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: s
     finished = False
     async with get_lock(room_code):
         state = await get_game(room_code)
-        reactivate_if_needed(state, username)  # clears a stale inactive flag if this player is clearly still acting
+        reactivate_if_needed(state, username) 
         if state.phase != GamePhase.PLAYING:
             raise HTTPException(status_code=400, detail="Game not started or ended")
         if not any(p.name == username for p in state.players):
@@ -270,7 +270,6 @@ async def take_row_endpoint(room_code: str, request: TakeRowRequest, username: s
             if state.phase == GamePhase.FINISHED:
                 finished = True
         response = TakeRowResponse(state=game_state_to_response(state))
-    # lock released: if the game finished, free its RAM
     if finished:
         hard_cleanup_room_memory(room_code)
     return response
@@ -299,7 +298,6 @@ async def leave(room_code: str, request: LeaveRoomRequest, username: str = Depen
             print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
         response = LeaveRoomResponse(state=game_state_to_response(state))
-    # lock released: if the room aborted, free its RAM
     if aborted:
         hard_cleanup_room_memory(room_code)
     return response
@@ -382,14 +380,6 @@ async def leave_observe(room_code: str, request: LeaveObserveRequest, username: 
             room_code=room_code,
             state=game_state_to_response(state)
         )
-# for debug purpose to end a match istantly
-# @app.post("/rooms/{room_code}/debug-finish")  
-# async def debug_finish(room_code: str):
-#    state = await get_game(room_code)
-#    state.phase = GamePhase.FINISHED
-#    await set_game(room_code, state)
-#    await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-#    return {"ok": True} '''
 
 @app.post("/register", response_model=RegisterResponse)
 async def register(request: RegisterRequest):
@@ -437,6 +427,5 @@ async def abort_game(room_code: str, username: str = Depends(get_current_user)):
         except Exception as e:
             print(f"[WARNING] Postgres unavailable, state only in Redis: {e}")
         await manager.broadcast(room_code, game_state_to_response(state).model_dump(mode='json'))
-    # lock released: free the aborted room's RAM
     hard_cleanup_room_memory(room_code)
     return {"ok": True}

@@ -5,12 +5,13 @@ import useAuthStore from '../store/useAuthStore'
 const WS_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 const API_URL = import.meta.env.VITE_API_URL
 
-// Websocket problem, if happen a bad connection the socket close so i need to make a pool request to reconect 
+// Exponential backoff for reconnection: the socket closes on any network
+   // blip, so we retry with growing delays instead of hammering the server.
 const RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 8000, 10000]
 
 // Ping/pong tuning: more aggressive than the generic 25-30s industry standard, because the game's turn inactivity timeout is only 60s — we
-// need to detect a zombie conection well before a player risks being marked inactive for a network problem that isn't their fault.
-const PING_INTERVAL_MS = 20000
+// need to detect a zombie connection well before a player risks being marked inactive for a network problem that isn't their fault.
+const PING_INTERVAL_MS = 15000
 const PONG_TIMEOUT_MS = 6000
 
 const useGameSocket = (roomCode) => {
@@ -74,7 +75,6 @@ const useGameSocket = (roomCode) => {
       wsRef.current = ws
       ws.onopen = () => {
         if (reconnectTimerRef.current) {
-          console.log('[FIX ACTIVE] clearing stale reconnect timer (onopen)')
           clearTimeout(reconnectTimerRef.current)
           reconnectTimerRef.current = null
         }
@@ -118,7 +118,6 @@ const useGameSocket = (roomCode) => {
         }
 
         if (data.sequence_number === lastSeqRef.current) {
-          console.log('WS ignored duplicate message:', data.sequence_number)
           return
         }
 
@@ -135,7 +134,6 @@ const useGameSocket = (roomCode) => {
         }
 
         lastSeqRef.current = data.sequence_number
-        console.log('WS received:', data.current_turn, data.phase)
         setGameState(data)
       }
 
@@ -150,7 +148,6 @@ const useGameSocket = (roomCode) => {
         if (!shouldReconnectRef.current) return
 
         if (reconnectTimerRef.current) {
-            console.log('[FIX ACTIVE] clearing stale reconnect timer (onclose)')
             clearTimeout(reconnectTimerRef.current)
             reconnectTimerRef.current = null
           }
@@ -167,7 +164,7 @@ const useGameSocket = (roomCode) => {
     }
 
     // Small initial delay, same as before, to avoid connecting before the
-    // room is guarateed to exist right after creation/join.
+    // room is guaranteed to exist right after creation/join.
     const initialTimer = setTimeout(connect, 100)
 
     return () => {

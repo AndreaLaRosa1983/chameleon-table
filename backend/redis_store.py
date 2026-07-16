@@ -130,7 +130,7 @@ def _key(room_code: str) -> str:
 
 
 async def _repair_from_postgres(room_code: str) -> GameState | None:
-    # Cache-aside fallback: restore from Postgres if Redis lost data, repopulate cache
+
     from backend.database import load_game
 
     state = await load_game(room_code)
@@ -145,7 +145,6 @@ async def _repair_from_postgres(room_code: str) -> GameState | None:
 
 
 async def redis_only_exists(room_code: str) -> bool:
-# Check Redis only (no repair); used by lifespan to avoid double-restoration
     
     client = await get_redis_client()
     return await client.exists(_key(room_code)) == 1
