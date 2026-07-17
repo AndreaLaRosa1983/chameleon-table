@@ -283,3 +283,17 @@
     color: #162016;
   }
 }
+
+.logoTitle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+
+.logoIcon {
+  width: 1.3em;
+  height: 1.3em;
+  flex-shrink: 0;
+}
