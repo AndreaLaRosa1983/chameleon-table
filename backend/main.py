@@ -143,8 +143,8 @@ async def start_room(room_code: str, request: StartRoomRequest, username: str = 
         state = await get_game(room_code)
         if state.phase != GamePhase.WAITING:
             raise HTTPException(status_code=400, detail="Game already started")
-        if not any(p.name == username for p in state.players):
-            raise HTTPException(status_code=403, detail="Only a player can start the game")
+        if state.turn_order[0] != username:
+            raise HTTPException(status_code=403, detail="Only the host can start the game")
         if len(state.players) < 2:
             raise HTTPException(status_code=400, detail="Not enough players")
         state.phase = GamePhase.PLAYING
