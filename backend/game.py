@@ -51,7 +51,7 @@ def assign_initial_colors(players: list[Player]) -> list[CardColor]:
             color = colors[i * cards_per_player + j]
             player.cards.append(Card(card_type=CardType.COLOR, color=color))
     
-    return colors[:n]
+    return colors
 
 def create_game(room_code: str, player_names: list[str]) -> GameState:
     players = create_players(player_names)
